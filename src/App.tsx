@@ -320,7 +320,7 @@ const App: React.FC = () => {
         >
           <Routes>
             {/* <Route path="/" element={<DashboardPage />} /> */}
-            <Route path="/" element={<DocumentManagementPage />} />
+            <Route path="/" element={<ReportWorkspacePage />} />
             <Route path="/projects/:projectId" element={<ProjectDetail />} />
             <Route path="/red-lights" element={<RedLightPage />} />
             <Route path="/documents" element={<DocumentManagementPage />} />
