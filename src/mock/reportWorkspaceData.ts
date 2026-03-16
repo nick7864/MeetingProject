@@ -1,0 +1,204 @@
+import {
+  DepartmentReportBlock,
+  ReportFields,
+  ReportWorkspaceProject,
+  ReportWorkspaceState,
+  WorkspaceDepartment,
+  WorkspaceImagePage,
+  WorkspacePage,
+  WorkspacePageType,
+  WorkspaceReportPage,
+  WorkspaceVersion,
+} from '../types/reportWorkspace';
+
+const nowIso = () => new Date().toISOString();
+
+const createEmptyFields = (): ReportFields => ({
+  workItem: '',
+  eta: '',
+  weeklyStatusAndRisk: '',
+  supportPlan: '',
+  executiveDiscussion: '',
+});
+
+const createReportBlocks = (departments: WorkspaceDepartment[]): DepartmentReportBlock[] =>
+  departments
+    .filter((department) => department.active)
+    .sort((a, b) => a.order - b.order)
+    .map((department) => ({
+      departmentId: department.id,
+      fields: createEmptyFields(),
+      isCompleted: false,
+      updatedAt: nowIso(),
+    }));
+
+const createImageGroups = (departments: WorkspaceDepartment[]) =>
+  departments
+    .filter((department) => department.active)
+    .sort((a, b) => a.order - b.order)
+    .map((department) => ({
+      departmentId: department.id,
+      images: [],
+    }));
+
+const initialDepartments: WorkspaceDepartment[] = [
+  { id: 'dept-1', name: '業務部', order: 1, active: true },
+  { id: 'dept-2', name: '研發部', order: 2, active: true },
+  { id: 'dept-3', name: '營運部', order: 3, active: true },
+  { id: 'dept-4', name: '公關部', order: 4, active: true },
+];
+
+const initialPages = (departments: WorkspaceDepartment[]): WorkspacePage[] => [
+  {
+    id: 'page-1',
+    name: '一般報表-page1',
+    type: 'report',
+    order: 1,
+    blocks: createReportBlocks(departments),
+  },
+  {
+    id: 'page-2',
+    name: '純圖片顯示-page2',
+    type: 'image',
+    order: 2,
+    groups: createImageGroups(departments),
+  },
+];
+
+const createInitialProject = (id: string, projectName: string): ReportWorkspaceProject => ({
+  id,
+  projectName,
+  currentDepartmentId: 'dept-1',
+  departments: initialDepartments.map((department) => ({ ...department })),
+  versions: [
+    {
+      id: `ver-1-${id}`,
+      versionNo: 1,
+      isLocked: false,
+      createdAt: nowIso(),
+      pages: initialPages(initialDepartments),
+    },
+  ],
+  activeVersionId: `ver-1-${id}`,
+  activePageId: 'page-1',
+  chat: {
+    messages: [
+      {
+        id: `sys-${id}`,
+        role: 'system',
+        content: '你是專案分析助理，請根據目前頁面內容協助摘要與風險判斷。',
+        createdAt: nowIso(),
+      },
+    ],
+    isLoading: false,
+  },
+});
+
+export const initialReportWorkspaceState: ReportWorkspaceState = {
+  currentRole: 'admin',
+  activeProjectId: 'project-1',
+  projects: [
+    createInitialProject('project-1', '專案 Alpha'),
+    createInitialProject('project-2', '專案 Beta'),
+    createInitialProject('project-3', '專案 Gamma'),
+  ],
+};
+
+export const createPage = (
+  pageType: WorkspacePageType,
+  pageNumber: number,
+  departments: WorkspaceDepartment[]
+): WorkspacePage => {
+  if (pageType === 'report') {
+    const reportPage: WorkspaceReportPage = {
+      id: `page-${Date.now()}`,
+      name: `一般報表-page${pageNumber}`,
+      type: 'report',
+      order: pageNumber,
+      blocks: createReportBlocks(departments),
+    };
+
+    return reportPage;
+  }
+
+  const imagePage: WorkspaceImagePage = {
+    id: `page-${Date.now()}`,
+    name: `純圖片顯示-page${pageNumber}`,
+    type: 'image',
+    order: pageNumber,
+    groups: createImageGroups(departments),
+  };
+
+  return imagePage;
+};
+
+export const cloneVersionForNext = (
+  currentVersion: WorkspaceVersion,
+  activePageId: string
+): { lockedVersion: WorkspaceVersion; nextVersion: WorkspaceVersion; nextActivePageId: string } => {
+  const lockedVersion: WorkspaceVersion = {
+    ...currentVersion,
+    isLocked: true,
+  };
+
+  const nextVersionNo = currentVersion.versionNo + 1;
+  const nextVersion: WorkspaceVersion = {
+    ...currentVersion,
+    id: `ver-${nextVersionNo}-${Date.now()}`,
+    versionNo: nextVersionNo,
+    isLocked: false,
+    createdAt: nowIso(),
+    sourceVersionId: currentVersion.id,
+    pages: currentVersion.pages.map((page) => {
+      if (page.type === 'report') {
+        return {
+          ...page,
+          blocks: page.blocks.map((block) => ({ ...block })),
+        };
+      }
+
+      return {
+        ...page,
+        groups: page.groups.map((group) => ({
+          ...group,
+          images: group.images.map((image) => ({ ...image })),
+        })),
+      };
+    }),
+  };
+
+  const hasActivePage = nextVersion.pages.some((page) => page.id === activePageId);
+  const nextActivePageId = hasActivePage && activePageId ? activePageId : nextVersion.pages[0]?.id ?? '';
+
+  return {
+    lockedVersion,
+    nextVersion,
+    nextActivePageId,
+  };
+};
+
+export const reorderItems = <T extends { id: string; order: number }>(
+  items: T[],
+  fromId: string,
+  direction: 'up' | 'down'
+): T[] => {
+  const sorted = [...items].sort((a, b) => a.order - b.order);
+  const index = sorted.findIndex((item) => item.id === fromId);
+
+  if (index < 0) {
+    return sorted;
+  }
+
+  const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+  if (targetIndex < 0 || targetIndex >= sorted.length) {
+    return sorted;
+  }
+
+  const current = sorted[index];
+  const target = sorted[targetIndex];
+  sorted[index] = { ...target, order: current.order };
+  sorted[targetIndex] = { ...current, order: target.order };
+
+  return sorted.sort((a, b) => a.order - b.order);
+};

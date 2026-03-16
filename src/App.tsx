@@ -31,6 +31,7 @@ import { RedLightDashboard } from './components/RedLight/RedLightDashboard';
 import { ProjectDetail } from './components/ProjectDetail/ProjectDetail';
 import { DocumentSearchPage } from './components/DocumentSearch/DocumentSearch';
 import { DocumentManagementPage } from './components/DocumentManagement/DocumentManagement';
+import { ReportWorkspacePage } from './components/ReportWorkspace';
 import { mockRedLights, mockNotifications } from './mock/data';
 
 const drawerWidth = 260;
@@ -63,8 +64,9 @@ const App: React.FC = () => {
   const menuItems = [
     // { text: '專案總覽', icon: <DashboardIcon />, path: '/' },
     // { text: '紅燈警示', icon: <WarningIcon />, path: '/red-lights', badge: mockRedLights.length },
-    { text: '文件管理', icon: <DescriptionIcon />, path: '/documents' },
-    { text: '文件搜尋', icon: <DescriptionIcon />, path: '/search' }
+    // { text: '文件管理', icon: <DescriptionIcon />, path: '/documents' },
+    // { text: '文件搜尋', icon: <DescriptionIcon />, path: '/search' },
+    { text: '報表工作台', icon: <DescriptionIcon />, path: '/report-workspace' },
   ];
 
   const drawer = (
@@ -323,6 +325,7 @@ const App: React.FC = () => {
             <Route path="/red-lights" element={<RedLightPage />} />
             <Route path="/documents" element={<DocumentManagementPage />} />
             <Route path="/search" element={<DocumentSearchPage />} />
+            <Route path="/report-workspace" element={<ReportWorkspacePage />} />
           </Routes>
         </Container>
       </Box>
