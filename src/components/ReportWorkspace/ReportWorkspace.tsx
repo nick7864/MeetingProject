@@ -50,7 +50,8 @@ import {
 
 const fieldsMeta: Array<{ key: keyof ReportFields; label: string; multiline?: number }> = [
   { key: 'workItem', label: '工作項目' },
-  { key: 'eta', label: '預計完成日' },
+  { key: 'plannedBuildDate', label: '預計完成日(掛建日)' },
+  { key: 'approvalDate', label: '預計完成日(核准日)' },
   { key: 'weeklyStatusAndRisk', label: '本周、下周辦理情形暨工作預警狀況說明', multiline: 3 },
   { key: 'supportPlan', label: '建請協助方案（公關機制/跨部門協調）', multiline: 3 },
   { key: 'executiveDiscussion', label: '待層峰討論 & 決議', multiline: 3 },
@@ -198,7 +199,8 @@ export const ReportWorkspacePage: React.FC = () => {
                 departmentId: newDepartment.id,
                 fields: {
                   workItem: '',
-                  eta: '',
+                  plannedBuildDate: '',
+                  approvalDate: '',
                   weeklyStatusAndRisk: '',
                   supportPlan: '',
                   executiveDiscussion: '',

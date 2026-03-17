@@ -11,7 +11,8 @@ export interface WorkspaceDepartment {
 
 export interface ReportFields {
   workItem: string;
-  eta: string;
+  plannedBuildDate: string;
+  approvalDate: string;
   weeklyStatusAndRisk: string;
   supportPlan: string;
   executiveDiscussion: string;

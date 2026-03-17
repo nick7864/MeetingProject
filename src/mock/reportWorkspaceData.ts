@@ -15,7 +15,8 @@ const nowIso = () => new Date().toISOString();
 
 const createEmptyFields = (): ReportFields => ({
   workItem: '',
-  eta: '',
+  plannedBuildDate: '',
+  approvalDate: '',
   weeklyStatusAndRisk: '',
   supportPlan: '',
   executiveDiscussion: '',
