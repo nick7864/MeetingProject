@@ -2,6 +2,9 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   alpha,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Chip,
@@ -27,6 +30,7 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   ArrowUpward as ArrowUpwardIcon,
   CheckCircle as CheckCircleIcon,
+  ExpandMore as ExpandMoreIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
   Send as SendIcon,
@@ -119,6 +123,7 @@ export const ReportWorkspacePage: React.FC = () => {
   const [state, setState] = useState<ReportWorkspaceState>(initialReportWorkspaceState);
   const [newDepartmentName, setNewDepartmentName] = useState('');
   const [newPageType, setNewPageType] = useState<WorkspacePageType>('report');
+  const [expandedDepartmentId, setExpandedDepartmentId] = useState<string>('');
   const [projectDialogMode, setProjectDialogMode] = useState<'create' | 'rename' | null>(null);
   const [projectNameInput, setProjectNameInput] = useState('');
   const [workspaceTab, setWorkspaceTab] = useState<'content' | 'chat'>('content');
@@ -890,31 +895,38 @@ export const ReportWorkspacePage: React.FC = () => {
                           );
 
                           return (
-                            <Paper
+                            <Accordion
                               key={block.departmentId}
-                              elevation={0}
+                              disableGutters
+                              expanded={expandedDepartmentId === block.departmentId}
+                              onChange={(_, expanded) => setExpandedDepartmentId(expanded ? block.departmentId : '')}
                               sx={{
-                                p: 2,
                                 borderRadius: 2,
                                 border: '1px solid',
                                 borderColor: block.isCompleted ? 'success.main' : 'divider',
                                 bgcolor: block.isCompleted
                                   ? alpha(theme.palette.success.main, 0.04)
                                   : alpha(theme.palette.background.paper, 0.9),
+                                '&:before': { display: 'none' },
+                                overflow: 'hidden',
                               }}
                             >
-                              <Box
+                              <AccordionSummary
+                                expandIcon={<ExpandMoreIcon />}
                                 sx={{
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
-                                  mb: 1,
                                   gap: 1,
                                 }}
                               >
                                 <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                                   {departmentName}
                                 </Typography>
+                              </AccordionSummary>
+
+                              <AccordionDetails sx={{ pt: 0 }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
                                 <Button
                                   size="small"
                                   variant={block.isCompleted ? 'outlined' : 'contained'}
@@ -926,7 +938,6 @@ export const ReportWorkspacePage: React.FC = () => {
                                   {block.isCompleted ? '已完成（可反悔）' : '編輯完畢'}
                                 </Button>
                               </Box>
-
                               <Stack spacing={1}>
                                 {fieldsMeta.map((meta) => (
                                   <TextField
@@ -944,7 +955,8 @@ export const ReportWorkspacePage: React.FC = () => {
                                   />
                                 ))}
                               </Stack>
-                            </Paper>
+                              </AccordionDetails>
+                            </Accordion>
                           );
                         })}
                     </Stack>
