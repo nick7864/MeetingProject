@@ -10,56 +10,28 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
-  IconButton,
-  Badge,
   Divider,
   Container,
   useTheme,
   alpha,
   Avatar,
-  Tooltip,
 } from '@mui/material';
 import {
   Description as DescriptionIcon,
-  Notifications as NotificationsIcon,
   KeyboardArrowRight as KeyboardArrowRightIcon,
   Construction as ConstructionIcon,
 } from '@mui/icons-material';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { theme } from './styles/theme';
-import { RedLightDashboard } from './components/RedLight/RedLightDashboard';
-import { ProjectDetail } from './components/ProjectDetail/ProjectDetail';
-import { DocumentSearchPage } from './components/DocumentSearch/DocumentSearch';
-import { DocumentManagementPage } from './components/DocumentManagement/DocumentManagement';
 import { ReportWorkspacePage } from './components/ReportWorkspace';
-import { mockRedLights, mockNotifications } from './mock/data';
 
 const drawerWidth = 260;
-
-// 紅燈儀表板頁面
-const RedLightPage: React.FC = () => {
-  return (
-    <Box className="animate-fade-in-up">
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-          紅燈警示管理
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          追蹤延誤專案與自動升級通知狀態 (7/14/30 天機制)
-        </Typography>
-      </Box>
-      <RedLightDashboard redLights={mockRedLights} />
-    </Box>
-  );
-};
 
 // 主應用程式
 const App: React.FC = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const theme = useTheme();
   const location = useLocation();
-
-  const unreadNotifications = mockNotifications.filter((n) => !n.isRead).length;
 
   const menuItems = [
     // { text: '專案總覽', icon: <DashboardIcon />, path: '/' },
@@ -218,30 +190,6 @@ const App: React.FC = () => {
         }}
       >
         <Toolbar sx={{ justifyContent: 'flex-end', gap: 1 }}>
-          <Tooltip title="通知">
-            <IconButton
-              sx={{
-                bgcolor: unreadNotifications > 0 ? alpha('#E05A47', 0.08) : 'transparent',
-                '&:hover': {
-                  bgcolor: unreadNotifications > 0 ? alpha('#E05A47', 0.12) : alpha('#000', 0.04),
-                },
-              }}
-            >
-              <Badge
-                badgeContent={unreadNotifications}
-                color="error"
-                sx={{
-                  '& .MuiBadge-badge': {
-                    fontWeight: 700,
-                    fontSize: '0.65rem',
-                  },
-                }}
-              >
-                <NotificationsIcon color={unreadNotifications > 0 ? 'error' : 'action'} />
-              </Badge>
-            </IconButton>
-          </Tooltip>
-          <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1.5 }} />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Avatar
               sx={{
@@ -319,12 +267,7 @@ const App: React.FC = () => {
           }}
         >
           <Routes>
-            {/* <Route path="/" element={<DashboardPage />} /> */}
             <Route path="/" element={<ReportWorkspacePage />} />
-            <Route path="/projects/:projectId" element={<ProjectDetail />} />
-            <Route path="/red-lights" element={<RedLightPage />} />
-            <Route path="/documents" element={<DocumentManagementPage />} />
-            <Route path="/search" element={<DocumentSearchPage />} />
             <Route path="/report-workspace" element={<ReportWorkspacePage />} />
           </Routes>
         </Container>

@@ -66,9 +66,10 @@ const initialPages = (departments: WorkspaceDepartment[]): WorkspacePage[] => [
   },
 ];
 
-const createInitialProject = (id: string, projectName: string): ReportWorkspaceProject => ({
+export const createWorkspaceProject = (id: string, projectName: string): ReportWorkspaceProject => ({
   id,
   projectName,
+  isArchived: false,
   currentDepartmentId: 'dept-1',
   departments: initialDepartments.map((department) => ({ ...department })),
   versions: [
@@ -99,9 +100,9 @@ export const initialReportWorkspaceState: ReportWorkspaceState = {
   currentRole: 'admin',
   activeProjectId: 'project-1',
   projects: [
-    createInitialProject('project-1', '專案 Alpha'),
-    createInitialProject('project-2', '專案 Beta'),
-    createInitialProject('project-3', '專案 Gamma'),
+    createWorkspaceProject('project-1', '專案 Alpha'),
+    createWorkspaceProject('project-2', '專案 Beta'),
+    createWorkspaceProject('project-3', '專案 Gamma'),
   ],
 };
 

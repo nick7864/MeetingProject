@@ -6,6 +6,7 @@ import {
   Button,
   Chip,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
@@ -33,6 +34,7 @@ import {
 import {
   createPage,
   cloneVersionForNext,
+  createWorkspaceProject,
   initialReportWorkspaceState,
   reorderItems,
 } from '../../mock/reportWorkspaceData';
@@ -117,14 +119,21 @@ export const ReportWorkspacePage: React.FC = () => {
   const [state, setState] = useState<ReportWorkspaceState>(initialReportWorkspaceState);
   const [newDepartmentName, setNewDepartmentName] = useState('');
   const [newPageType, setNewPageType] = useState<WorkspacePageType>('report');
+  const [projectDialogMode, setProjectDialogMode] = useState<'create' | 'rename' | null>(null);
+  const [projectNameInput, setProjectNameInput] = useState('');
   const [workspaceTab, setWorkspaceTab] = useState<'content' | 'chat'>('content');
   const [chatInput, setChatInput] = useState('');
   const [previewImage, setPreviewImage] = useState<WorkspaceImageItem | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
 
+  const visibleProjects = useMemo(
+    () => state.projects.filter((project) => !project.isArchived),
+    [state.projects]
+  );
+
   const activeProject = useMemo(
-    () => state.projects.find((project) => project.id === state.activeProjectId),
-    [state.activeProjectId, state.projects]
+    () => visibleProjects.find((project) => project.id === state.activeProjectId) ?? visibleProjects[0],
+    [state.activeProjectId, visibleProjects]
   );
 
   const activeVersion = useMemo(
@@ -145,12 +154,91 @@ export const ReportWorkspacePage: React.FC = () => {
   const updateActiveProject = (
     updater: (project: ReportWorkspaceProject) => ReportWorkspaceProject
   ) => {
+    if (!activeProject) {
+      return;
+    }
+
     setState((prev) => ({
       ...prev,
       projects: prev.projects.map((project) =>
         project.id === prev.activeProjectId ? updater(project) : project
       ),
     }));
+  };
+
+  const openCreateProjectDialog = () => {
+    setProjectDialogMode('create');
+    setProjectNameInput('');
+  };
+
+  const openRenameProjectDialog = () => {
+    if (!activeProject) {
+      return;
+    }
+
+    setProjectDialogMode('rename');
+    setProjectNameInput(activeProject.projectName);
+  };
+
+  const closeProjectDialog = () => {
+    setProjectDialogMode(null);
+    setProjectNameInput('');
+  };
+
+  const handleSaveProjectDialog = () => {
+    const name = projectNameInput.trim();
+    if (!name) {
+      return;
+    }
+
+    if (projectDialogMode === 'create') {
+      setState((prev) => {
+        const projectId = `project-${Date.now()}`;
+        const newProject = createWorkspaceProject(projectId, name);
+        return {
+          ...prev,
+          activeProjectId: projectId,
+          projects: [...prev.projects, newProject],
+        };
+      });
+      setSnackbar({ open: true, message: '新專案已建立。' });
+    }
+
+    if (projectDialogMode === 'rename' && activeProject) {
+      setState((prev) => ({
+        ...prev,
+        projects: prev.projects.map((project) =>
+          project.id === activeProject.id ? { ...project, projectName: name } : project
+        ),
+      }));
+      setSnackbar({ open: true, message: '專案名稱已更新。' });
+    }
+
+    closeProjectDialog();
+  };
+
+  const handleArchiveProject = () => {
+    if (!activeProject) {
+      return;
+    }
+
+    const remainingProjects = visibleProjects.filter((project) => project.id !== activeProject.id);
+    if (remainingProjects.length === 0) {
+      setSnackbar({ open: true, message: '至少需保留一個可用專案。' });
+      return;
+    }
+
+    const fallbackProjectId = remainingProjects[0].id;
+
+    setState((prev) => ({
+      ...prev,
+      activeProjectId: fallbackProjectId,
+      projects: prev.projects.map((project) =>
+        project.id === activeProject.id ? { ...project, isArchived: true } : project
+      ),
+    }));
+
+    setSnackbar({ open: true, message: '專案已封存。' });
   };
 
   const updateStateVersions = (updater: (pages: WorkspacePage[], isLocked: boolean) => WorkspacePage[]) => {
@@ -324,13 +412,13 @@ export const ReportWorkspacePage: React.FC = () => {
           blocks: page.blocks.map((block) =>
             block.departmentId === departmentId
               ? {
-                  ...block,
-                  fields: {
-                    ...block.fields,
-                    [field]: value,
-                  },
-                  updatedAt: nowIso(),
-                }
+                ...block,
+                fields: {
+                  ...block.fields,
+                  [field]: value,
+                },
+                updatedAt: nowIso(),
+              }
               : block
           ),
         };
@@ -354,10 +442,10 @@ export const ReportWorkspacePage: React.FC = () => {
           blocks: page.blocks.map((block) =>
             block.departmentId === departmentId
               ? {
-                  ...block,
-                  isCompleted: !block.isCompleted,
-                  updatedAt: nowIso(),
-                }
+                ...block,
+                isCompleted: !block.isCompleted,
+                updatedAt: nowIso(),
+              }
               : block
           ),
         };
@@ -575,16 +663,28 @@ export const ReportWorkspacePage: React.FC = () => {
       >
         <Select
           size="small"
-          value={state.activeProjectId}
+          value={activeProject?.id ?? ''}
           onChange={(event) => setState((prev) => ({ ...prev, activeProjectId: event.target.value }))}
           sx={{ minWidth: 220 }}
         >
-          {state.projects.map((project) => (
+          {visibleProjects.map((project) => (
             <MenuItem key={project.id} value={project.id}>
               {project.projectName}
             </MenuItem>
           ))}
         </Select>
+
+        <Button variant="outlined" onClick={openCreateProjectDialog} disabled={!isAdmin}>
+          新增專案
+        </Button>
+
+        <Button variant="outlined" onClick={openRenameProjectDialog} disabled={!isAdmin || !activeProject}>
+          重新命名
+        </Button>
+
+        <Button variant="outlined" color="warning" onClick={handleArchiveProject} disabled={!isAdmin || !activeProject}>
+          封存專案
+        </Button>
         <Select
           size="small"
           value={state.currentRole}
@@ -705,7 +805,7 @@ export const ReportWorkspacePage: React.FC = () => {
                   onClick={handleAddDepartment}
                   disabled={!isAdmin || !!activeVersion?.isLocked}
                 >
-                  新增
+                  {/* 新增 */}
                 </Button>
               </Box>
             </Stack>
@@ -868,91 +968,91 @@ export const ReportWorkspacePage: React.FC = () => {
                               目前檢視部門：{currentDepartmentName}
                             </Typography>
 
-                      <Button
-                        component="label"
-                        variant="outlined"
-                        disabled={activeVersion.isLocked}
-                        sx={{ width: 'fit-content' }}
-                      >
-                        上傳圖片
-                        <input
-                          hidden
-                          multiple
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) => {
-                            handleUploadImages(activePage.id, activeProject?.currentDepartmentId ?? '', event.target.files);
-                            event.target.value = '';
-                          }}
-                        />
-                      </Button>
-
-                      {activeImageGroup.images
-                        .slice()
-                        .sort((a, b) => a.order - b.order)
-                        .map((image, index, sorted) => (
-                          <Paper key={image.id} elevation={0} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
-                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr' }, gap: 1.5 }}>
-                              <Box
-                                component="img"
-                                src={image.url}
-                                alt={image.name}
-                                onClick={() => setPreviewImage(image)}
-                                sx={{
-                                  width: '100%',
-                                  height: 100,
-                                  objectFit: 'cover',
-                                  borderRadius: 1,
-                                  cursor: 'zoom-in',
+                            <Button
+                              component="label"
+                              variant="outlined"
+                              disabled={activeVersion.isLocked}
+                              sx={{ width: 'fit-content' }}
+                            >
+                              上傳圖片
+                              <input
+                                hidden
+                                multiple
+                                type="file"
+                                accept="image/*"
+                                onChange={(event) => {
+                                  handleUploadImages(activePage.id, activeProject?.currentDepartmentId ?? '', event.target.files);
+                                  event.target.value = '';
                                 }}
                               />
-                              <Stack spacing={1}>
-                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                  {image.name}
-                                </Typography>
-                                <TextField
-                                  size="small"
-                                  label="註解"
-                                  value={image.note}
-                                  onChange={(event) =>
-                                    handleImageNoteChange(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, event.target.value)
-                                  }
-                                  disabled={activeVersion.isLocked}
-                                />
-                                <Box sx={{ display: 'flex', gap: 1 }}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() =>
-                                      handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'up')
-                                    }
-                                    disabled={activeVersion.isLocked || index === 0}
-                                  >
-                                    <ArrowUpwardIcon fontSize="small" />
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() =>
-                                      handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'down')
-                                    }
-                                    disabled={activeVersion.isLocked || index === sorted.length - 1}
-                                  >
-                                    <ArrowDownwardIcon fontSize="small" />
-                                  </IconButton>
-                                  <Button
-                                    size="small"
-                                    color="error"
-                                    onClick={() =>
-                                      handleDeleteImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id)
-                                    }
-                                    disabled={activeVersion.isLocked}
-                                  >
-                                    刪除
-                                  </Button>
-                                </Box>
-                              </Stack>
-                            </Box>
-                          </Paper>
-                        ))}
+                            </Button>
+
+                            {activeImageGroup.images
+                              .slice()
+                              .sort((a, b) => a.order - b.order)
+                              .map((image, index, sorted) => (
+                                <Paper key={image.id} elevation={0} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '120px 1fr' }, gap: 1.5 }}>
+                                    <Box
+                                      component="img"
+                                      src={image.url}
+                                      alt={image.name}
+                                      onClick={() => setPreviewImage(image)}
+                                      sx={{
+                                        width: '100%',
+                                        height: 100,
+                                        objectFit: 'cover',
+                                        borderRadius: 1,
+                                        cursor: 'zoom-in',
+                                      }}
+                                    />
+                                    <Stack spacing={1}>
+                                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                        {image.name}
+                                      </Typography>
+                                      <TextField
+                                        size="small"
+                                        label="註解"
+                                        value={image.note}
+                                        onChange={(event) =>
+                                          handleImageNoteChange(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, event.target.value)
+                                        }
+                                        disabled={activeVersion.isLocked}
+                                      />
+                                      <Box sx={{ display: 'flex', gap: 1 }}>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'up')
+                                          }
+                                          disabled={activeVersion.isLocked || index === 0}
+                                        >
+                                          <ArrowUpwardIcon fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                          size="small"
+                                          onClick={() =>
+                                            handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'down')
+                                          }
+                                          disabled={activeVersion.isLocked || index === sorted.length - 1}
+                                        >
+                                          <ArrowDownwardIcon fontSize="small" />
+                                        </IconButton>
+                                        <Button
+                                          size="small"
+                                          color="error"
+                                          onClick={() =>
+                                            handleDeleteImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id)
+                                          }
+                                          disabled={activeVersion.isLocked}
+                                        >
+                                          刪除
+                                        </Button>
+                                      </Box>
+                                    </Stack>
+                                  </Box>
+                                </Paper>
+                              ))}
                           </>
                         );
                       })()}
@@ -1075,6 +1175,26 @@ export const ReportWorkspacePage: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <Dialog open={projectDialogMode !== null} onClose={closeProjectDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>{projectDialogMode === 'create' ? '新增專案' : '重新命名專案'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="專案名稱"
+            fullWidth
+            value={projectNameInput}
+            onChange={(event) => setProjectNameInput(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeProjectDialog}>取消</Button>
+          <Button onClick={handleSaveProjectDialog} variant="contained">
+            確認
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={!!previewImage}

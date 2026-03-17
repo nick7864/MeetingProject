@@ -1,1 +1,0 @@
-export { DocumentManagementPage } from './DocumentManagement';

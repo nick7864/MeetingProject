@@ -77,6 +77,7 @@ export interface WorkspaceChatMessage {
 export interface ReportWorkspaceProject {
   id: string;
   projectName: string;
+  isArchived: boolean;
   currentDepartmentId: string;
   departments: WorkspaceDepartment[];
   versions: WorkspaceVersion[];
