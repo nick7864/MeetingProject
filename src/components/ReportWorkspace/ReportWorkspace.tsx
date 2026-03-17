@@ -774,47 +774,49 @@ export const ReportWorkspacePage: React.FC = () => {
           display: 'grid',
           gridTemplateColumns: {
             xs: '1fr',
-            lg: workspaceTab === 'chat' ? '280px 1fr' : '280px 1fr 320px',
+            lg: workspaceTab === 'chat' || !isAdmin ? '280px 1fr' : '280px 1fr 320px',
           },
           gap: 2,
         }}
       >
         <Stack spacing={2}>
-          <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
-              部門設定
-            </Typography>
-            <Stack spacing={1.25}>
-              {sortedDepartments.map((department) => (
-                <TextField
-                  key={department.id}
-                  size="small"
-                  label={`部門 ${department.order}`}
-                  value={department.name}
-                  onChange={(event) => handleDepartmentRename(department.id, event.target.value)}
-                  disabled={!isAdmin || !!activeVersion?.isLocked}
-                />
-              ))}
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <TextField
-                  size="small"
-                  label="新增部門"
-                  value={newDepartmentName}
-                  onChange={(event) => setNewDepartmentName(event.target.value)}
-                  disabled={!isAdmin || !!activeVersion?.isLocked}
-                  fullWidth
-                />
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={handleAddDepartment}
-                  disabled={!isAdmin || !!activeVersion?.isLocked}
-                >
-                  {/* 新增 */}
-                </Button>
-              </Box>
-            </Stack>
-          </Paper>
+          {isAdmin && (
+            <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+                部門設定
+              </Typography>
+              <Stack spacing={1.25}>
+                {sortedDepartments.map((department) => (
+                  <TextField
+                    key={department.id}
+                    size="small"
+                    label={`部門 ${department.order}`}
+                    value={department.name}
+                    onChange={(event) => handleDepartmentRename(department.id, event.target.value)}
+                    disabled={!isAdmin || !!activeVersion?.isLocked}
+                  />
+                ))}
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    size="small"
+                    label="新增部門"
+                    value={newDepartmentName}
+                    onChange={(event) => setNewDepartmentName(event.target.value)}
+                    disabled={!isAdmin || !!activeVersion?.isLocked}
+                    fullWidth
+                  />
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddDepartment}
+                    disabled={!isAdmin || !!activeVersion?.isLocked}
+                  >
+                    {/* 新增 */}
+                  </Button>
+                </Box>
+              </Stack>
+            </Paper>
+          )}
 
           <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
@@ -878,6 +880,9 @@ export const ReportWorkspacePage: React.FC = () => {
                   {activePage.type === 'report' && (
                     <Stack spacing={2}>
                       {activePage.blocks
+                        .filter((block) =>
+                          isAdmin ? true : block.departmentId === (activeProject?.currentDepartmentId ?? '')
+                        )
                         .slice()
                         .sort((a, b) => {
                           const orderA = activeProject?.departments.find((department) => department.id === a.departmentId)?.order ?? 999;
@@ -1074,45 +1079,47 @@ export const ReportWorkspacePage: React.FC = () => {
               )}
             </Paper>
 
-            <Stack spacing={2}>
-              <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
-                  部門完成度
-                </Typography>
-                {activePage?.type === 'report' ? (
-                  <Stack spacing={1}>
-                    {activePage.blocks.map((block) => {
-                      const departmentName =
-                        activeProject?.departments.find((department) => department.id === block.departmentId)?.name ?? block.departmentId;
-                      return (
-                        <Box
-                          key={block.departmentId}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            p: 1,
-                            borderRadius: 1,
-                            bgcolor: alpha(theme.palette.background.default, 0.6),
-                          }}
-                        >
-                          <Typography variant="body2">{departmentName}</Typography>
-                          <Chip
-                            size="small"
-                            color={block.isCompleted ? 'success' : 'default'}
-                            label={block.isCompleted ? '已完成' : '未完成'}
-                          />
-                        </Box>
-                      );
-                    })}
-                  </Stack>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    目前頁面為圖片模式，無部門完成度欄位。
+            {isAdmin && (
+              <Stack spacing={2}>
+                <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
+                    部門完成度
                   </Typography>
-                )}
-              </Paper>
-            </Stack>
+                  {activePage?.type === 'report' ? (
+                    <Stack spacing={1}>
+                      {activePage.blocks.map((block) => {
+                        const departmentName =
+                          activeProject?.departments.find((department) => department.id === block.departmentId)?.name ?? block.departmentId;
+                        return (
+                          <Box
+                            key={block.departmentId}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              p: 1,
+                              borderRadius: 1,
+                              bgcolor: alpha(theme.palette.background.default, 0.6),
+                            }}
+                          >
+                            <Typography variant="body2">{departmentName}</Typography>
+                            <Chip
+                              size="small"
+                              color={block.isCompleted ? 'success' : 'default'}
+                              label={block.isCompleted ? '已完成' : '未完成'}
+                            />
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      目前頁面為圖片模式，無部門完成度欄位。
+                    </Typography>
+                  )}
+                </Paper>
+              </Stack>
+            )}
           </>
         ) : (
           <Paper
