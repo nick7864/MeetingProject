@@ -59,7 +59,7 @@ const fieldsMeta: Array<{ key: keyof ReportFields; label: string; multiline?: nu
   { key: 'plannedBuildDate', label: '預計完成日(掛建日)' },
   { key: 'approvalDate', label: '預計完成日(核准日)' },
   { key: 'weeklyStatusAndRisk', label: '本周、下周辦理情形暨工作預警狀況說明', multiline: 3 },
-  { key: 'supportPlan', label: '建請協助方案（公關機制/跨部門協調）', multiline: 3 },
+  { key: 'supportPlan', label: '建請協助方案（公關機制/跨部門協調test）', multiline: 3 },
   { key: 'executiveDiscussion', label: '待層峰討論 & 決議', multiline: 3 },
 ];
 
@@ -931,35 +931,35 @@ export const ReportWorkspacePage: React.FC = () => {
                               </AccordionSummary>
 
                               <AccordionDetails sx={{ pt: 0 }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-                                <Button
-                                  size="small"
-                                  variant={block.isCompleted ? 'outlined' : 'contained'}
-                                  color={block.isCompleted ? 'success' : 'primary'}
-                                  startIcon={<CheckCircleIcon />}
-                                  onClick={() => handleToggleCompleted(activePage.id, block.departmentId)}
-                                  disabled={!editable}
-                                >
-                                  {block.isCompleted ? '已完成（可反悔）' : '編輯完畢'}
-                                </Button>
-                              </Box>
-                              <Stack spacing={1}>
-                                {fieldsMeta.map((meta) => (
-                                  <TextField
-                                    key={meta.key}
-                                    label={meta.label}
+                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+                                  <Button
                                     size="small"
-                                    value={block.fields[meta.key]}
-                                    onChange={(event) =>
-                                      handleFieldChange(activePage.id, block.departmentId, meta.key, event.target.value)
-                                    }
-                                    multiline={!!meta.multiline}
-                                    minRows={meta.multiline}
+                                    variant={block.isCompleted ? 'outlined' : 'contained'}
+                                    color={block.isCompleted ? 'success' : 'primary'}
+                                    startIcon={<CheckCircleIcon />}
+                                    onClick={() => handleToggleCompleted(activePage.id, block.departmentId)}
                                     disabled={!editable}
-                                    fullWidth
-                                  />
-                                ))}
-                              </Stack>
+                                  >
+                                    {block.isCompleted ? '已完成（可反悔）' : '編輯完畢'}
+                                  </Button>
+                                </Box>
+                                <Stack spacing={1}>
+                                  {fieldsMeta.map((meta) => (
+                                    <TextField
+                                      key={meta.key}
+                                      label={meta.label}
+                                      size="small"
+                                      value={block.fields[meta.key]}
+                                      onChange={(event) =>
+                                        handleFieldChange(activePage.id, block.departmentId, meta.key, event.target.value)
+                                      }
+                                      multiline={!!meta.multiline}
+                                      minRows={meta.multiline}
+                                      disabled={!editable}
+                                      fullWidth
+                                    />
+                                  ))}
+                                </Stack>
                               </AccordionDetails>
                             </Accordion>
                           );
