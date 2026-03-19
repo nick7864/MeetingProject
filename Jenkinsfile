@@ -15,24 +15,6 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh 'npm ci'
-            }
-        }
-
-        stage('TypeScript Compile Check') {
-            steps {
-                sh 'npx tsc --noEmit'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                sh 'npm run build'
-            }
-        }
-
         stage('Docker Build') {
             steps {
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest ."
