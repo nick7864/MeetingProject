@@ -78,8 +78,18 @@ pipeline {
             }
         }
         always {
-            // 清理未使用的 Docker images，避免磁碟空間耗盡
+            // 清理 dangling images
             sh "docker image prune -f || true"
+
+            // 只保留最近 5 個版本，刪除更舊的 image
+            sh """
+                docker images ${IMAGE_NAME} --format '{{.Tag}}' \
+                  | grep -E '^[0-9]+\$' \
+                  | sort -rn \
+                  | tail -n +6 \
+                  | xargs -r -I {} docker rmi ${IMAGE_NAME}:{} || true
+            """
+
             cleanWs()
         }
     }
