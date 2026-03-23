@@ -31,26 +31,18 @@ pipeline {
                     ).trim()
                     echo "舊版本 image: ${env.OLD_IMAGE}"
 
-                    // 清理可能殘留的舊 _new 容器
-                    sh "docker stop ${CONTAINER_NAME}_new || true"
-                    sh "docker rm ${CONTAINER_NAME}_new || true"
+                    // 停掉並移除舊容器
+                    sh "docker stop ${CONTAINER_NAME} || true"
+                    sh "docker rm ${CONTAINER_NAME} || true"
 
-                    // 啟動臨時容器（不綁 port，僅用於健康檢查）
-                    sh "docker run -d --name ${CONTAINER_NAME}_new ${IMAGE_NAME}:${IMAGE_TAG}"
+                    // 啟動新版本容器
+                    sh "docker run -d --name ${CONTAINER_NAME} -p ${CONTAINER_PORT}:80 --restart unless-stopped ${IMAGE_NAME}:${IMAGE_TAG}"
 
-                    // 健康檢查：透過 docker exec 從容器內部檢查，不需要暴露 port
+                    // 健康檢查：retry 5 次，每次間隔 3 秒
                     retry(5) {
                         sleep 3
-                        sh "docker exec ${CONTAINER_NAME}_new wget -q --spider http://localhost:80"
+                        sh "curl -f http://localhost:${CONTAINER_PORT}"
                     }
-
-                    // 健康檢查通過 → 停掉臨時容器 → 停掉舊容器 → 用正式 port 啟動新版本
-                    sh """
-                        docker stop ${CONTAINER_NAME}_new && docker rm ${CONTAINER_NAME}_new
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-                        docker run -d --name ${CONTAINER_NAME} -p ${CONTAINER_PORT}:80 --restart unless-stopped ${IMAGE_NAME}:${IMAGE_TAG}
-                    """
                 }
             }
         }
@@ -62,22 +54,19 @@ pipeline {
         }
         failure {
             script {
-                // 清理失敗的臨時容器
-                sh "docker stop ${CONTAINER_NAME}_new || true"
-                sh "docker rm ${CONTAINER_NAME}_new || true"
-
-                // 如果舊容器已被移除（部署中途失敗），嘗試用舊 image 還原
+                // 檢查容器是否存活
                 def running = sh(
                     script: "docker ps -q -f name=^${CONTAINER_NAME}\$",
                     returnStdout: true
                 ).trim()
 
                 if (!running && env.OLD_IMAGE) {
-                    echo "舊容器已不存在，正在用 ${env.OLD_IMAGE} 還原..."
+                    echo "新版本啟動失敗，正在用 ${env.OLD_IMAGE} 還原..."
+                    sh "docker rm ${CONTAINER_NAME} || true"
                     sh "docker run -d --name ${CONTAINER_NAME} -p ${CONTAINER_PORT}:80 --restart unless-stopped ${env.OLD_IMAGE} || true"
                     echo "已還原至舊版本 ${env.OLD_IMAGE}"
                 } else if (running) {
-                    echo "舊容器仍在運行，無需還原"
+                    echo "容器仍在運行（可能是 Build 階段失敗）"
                 } else {
                     echo "無舊版本 image 可還原（可能是首次部署）"
                 }
