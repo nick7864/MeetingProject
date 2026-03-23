@@ -31,6 +31,10 @@ pipeline {
                     ).trim()
                     echo "舊版本 image: ${env.OLD_IMAGE}"
 
+                    // 清理可能殘留的舊 _new 容器（避免名稱與 port 衝突）
+                    sh "docker stop ${CONTAINER_NAME}_new || true"
+                    sh "docker rm ${CONTAINER_NAME}_new || true"
+
                     // 用臨時 port 啟動新容器做健康檢查（避免與舊容器 port 衝突）
                     sh "docker run -d --name ${CONTAINER_NAME}_new -p 8081:80 ${IMAGE_NAME}:${IMAGE_TAG}"
 
