@@ -38,10 +38,13 @@ pipeline {
                     // 啟動新版本容器
                     sh "docker run -d --name ${CONTAINER_NAME} -p ${CONTAINER_PORT}:80 --restart unless-stopped ${IMAGE_NAME}:${IMAGE_TAG}"
 
-                    // 健康檢查：retry 5 次，每次間隔 3 秒
+                    // 健康檢查：用容器內部 IP 檢查（避免 Jenkins 容器的 localhost 指向自己）
                     retry(5) {
                         sleep 3
-                        sh "curl -f http://localhost:${CONTAINER_PORT}"
+                        sh """
+                            CONTAINER_IP=\$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${CONTAINER_NAME})
+                            curl -f http://\${CONTAINER_IP}:80
+                        """
                     }
                 }
             }
