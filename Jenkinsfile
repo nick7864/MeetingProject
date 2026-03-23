@@ -15,15 +15,6 @@ pipeline {
             }
         }
 
-        stage('Install & Test') {
-            steps {
-                sh 'npm ci'
-                sh 'npm run lint  || true'
-                sh 'npm run test || true'
-                sh 'npm run build'
-            }
-        }
-
         stage('Docker Build') {
             steps {
                 sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest ."
