@@ -894,8 +894,12 @@ export const ReportWorkspacePage: React.FC = () => {
 
         const groupIndex = page.groups.findIndex((group) => group.departmentId === departmentId);
         const currentGroup = groupIndex >= 0 ? page.groups[groupIndex] : { departmentId, images: [] };
+        if (currentGroup.images.length >= 1) {
+          setSnackbar({ open: true, message: '每個純圖片頁面只能上傳一張圖片，請新增頁面放置其他圖片。' });
+          return page;
+        }
         const lastOrder = currentGroup.images.reduce((max, image) => Math.max(max, image.order), 0);
-        const uploaded: WorkspaceImageItem[] = Array.from(files).map((file, index) => ({
+        const uploaded: WorkspaceImageItem[] = Array.from(files).slice(0, 1).map((file, index) => ({
           id: `img-${Date.now()}-${index}`,
           url: URL.createObjectURL(file),
           name: file.name,
@@ -1937,7 +1941,6 @@ export const ReportWorkspacePage: React.FC = () => {
                               上傳圖片
                               <input
                                 hidden
-                                multiple
                                 type="file"
                                 accept="image/*"
                                 onChange={(event) => {

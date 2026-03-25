@@ -313,178 +313,81 @@ tests:
 ---
 ### Requirement: Continuous department-first scroll presentation
 
-The system SHALL render content in a continuous department-first flow, and within each department section it SHALL preserve original page order.
+The system SHALL render meeting presentation as a department-first slide deck, and within each department section it SHALL preserve original page order as discrete slides rather than a continuous scroll surface.
 
 #### Scenario: Present project progress in meeting flow by department
 
 - **WHEN** the presentation page loads a project version
-- **THEN** the page displays department sections in configured department order and each section displays content in original page order
+- **THEN** the page builds slides in configured department order and, within each department, keeps the original page order for slide playback
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: redesign-meeting-presentation-slides
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/App.tsx
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
 ### Requirement: Department tab navigation uses in-page smooth scroll
 
-The system SHALL provide department tabs in backend-defined department order, and tab selection SHALL perform in-page smooth scroll to the target department section.
+The system SHALL provide slide navigation that uses previous/next controls, keyboard left/right arrow shortcuts for sequential playback, and a hidden drawer for direct slide jumping, and SHALL NOT use in-page smooth scroll between department sections as the primary presentation interaction.
 
-#### Scenario: Jump to another department section
+#### Scenario: Jump to another slide from presentation navigation
 
-- **WHEN** a presenter selects a department tab
-- **THEN** the viewport smoothly scrolls to the matching section without replacing the current page with a single-department mode
+- **WHEN** a presenter uses previous/next controls or opens the hidden slide drawer to select a target slide
+- **THEN** the presentation replaces the current slide with the target slide without scrolling within a continuous page
+
+#### Scenario: Navigate slides with keyboard arrow shortcuts
+
+- **WHEN** the presentation is in report playback mode and the presenter presses the Left or Right arrow key
+- **THEN** the current slide moves to the previous or next slide when such a target exists
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: redesign-meeting-presentation-slides
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/App.tsx
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
 ### Requirement: Presentation toolbar supports meeting controls
 
-The presentation toolbar SHALL include project/version/lock status, department tabs, fullscreen toggle, and font-size toggle.
+The presentation toolbar SHALL include project/version/lock status, previous/next slide controls, hidden slide-drawer access, fullscreen toggle, and font-size toggle after report playback begins.
 
 #### Scenario: Show required controls in presentation toolbar
 
 - **WHEN** the presentation page is visible in normal mode
-- **THEN** the toolbar displays lock-aware meeting context and the four required control groups
+- **THEN** the toolbar displays lock-aware meeting context and the required control groups for sequential slide playback and direct slide jumping
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: redesign-meeting-presentation-slides
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/App.tsx
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
@@ -785,60 +688,31 @@ tests:
 ---
 ### Requirement: Fullscreen mode auto-hides toolbar
 
-In fullscreen mode, the system SHALL auto-hide the toolbar and SHALL reveal it when pointer interaction occurs at the top boundary.
+In fullscreen mode, the system SHALL auto-hide the presentation toolbar, SHALL reveal it when mouse movement reaches the presentation interaction area, and SHALL hide the application header and left navigation chrome while fullscreen is active.
 
-#### Scenario: Reveal hidden toolbar in fullscreen
+#### Scenario: Reveal hidden toolbar in fullscreen after mouse movement
 
-- **WHEN** fullscreen mode is active and the pointer reaches the top reveal area
+- **WHEN** fullscreen mode is active and the presenter moves the mouse into the reveal area
 - **THEN** the toolbar becomes visible for interaction and returns to auto-hidden state after inactivity
+
+#### Scenario: Hide application chrome during fullscreen presentation
+
+- **WHEN** the presenter enters fullscreen mode from the presentation page
+- **THEN** the application header and left sidebar are hidden until fullscreen mode ends
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: redesign-meeting-presentation-slides
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/App.tsx
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
@@ -960,14 +834,14 @@ tests:
 -->
 
 ---
-### Requirement: Department image preview and lightbox behavior
+### Requirement: Pure image page accepts only one image per page
 
-For image pages in each department section, the system SHALL show up to 4 preview thumbnails and SHALL provide a "View All" action that opens a lightbox.
+For pure image presentation pages, the system SHALL allow at most one uploaded image for each department on each page.
 
-#### Scenario: Open lightbox from image section
+#### Scenario: Attempt to upload a second image to the same pure image page
 
-- **WHEN** a presenter selects "View All" in a department image section
-- **THEN** the lightbox opens starting from the first image of that section
+- **WHEN** a user tries to add another image to a pure image page that already contains one image for the same department
+- **THEN** the system rejects the upload and instructs the user to create another pure image page for additional images
 
 
 <!-- @trace
@@ -1019,14 +893,14 @@ tests:
 -->
 
 ---
-### Requirement: Lightbox shows image notes by default
+### Requirement: Pure image presentation page displays a single image with note
 
-The lightbox SHALL display image notes by default for each displayed image.
+For pure image presentation pages, the system SHALL render the uploaded image as the primary visual content and SHALL display that image's note directly on the page.
 
-#### Scenario: Navigate images in lightbox with notes visible
+#### Scenario: Open a pure image presentation page with one uploaded image
 
-- **WHEN** the presenter moves to next or previous image inside lightbox
-- **THEN** the corresponding image note remains visible by default
+- **WHEN** the presentation opens a pure image page that contains one uploaded image for the current department
+- **THEN** the page shows that image as the main content and shows its note inline without requiring a lightbox or gallery action
 
 
 <!-- @trace
@@ -1075,65 +949,105 @@ tests:
   - src/test/setup.ts
   - src/App.test.tsx
   - src/test/smoke.test.ts
+-->
+
+---
+### Requirement: Report slides use card-section full-content layout
+
+For report pages in meeting presentation, the system SHALL render all six report fields for the current department on a single slide using a card-section layout with subtle dividers, preserved whitespace, and full content readability without converting the page into a continuous scroll view.
+
+#### Scenario: Open a report slide for one department page
+
+- **WHEN** the presentation opens a report page slide for a department
+- **THEN** the slide shows work item, weekly status and risk, planned build date, approval date, support plan, and executive discussion in fixed content sections on the same slide
+
+
+<!-- @trace
+source: redesign-meeting-presentation-slides
+updated: 2026-03-25
+code:
+  - .opencode/skills/spectra-archive/SKILL.md
+  - package.json
+  - src/constants/reportFieldLimits.ts
+  - .opencode/skills/spectra-apply/SKILL.md
+  - src/mock/reportWorkspaceData.ts
+  - .opencode/commands/spectra-audit.md
+  - .opencode/commands/spectra-apply.md
+  - src/App.tsx
+  - .agents/skills/spectra-archive/SKILL.md
+  - .agents/skills/spectra-ingest/SKILL.md
+  - .opencode/skills/spectra-ingest/SKILL.md
+  - .opencode/commands/spectra-propose.md
+  - .opencode/skills/spectra-debug/SKILL.md
+  - .opencode/commands/spectra-ask.md
+  - .opencode/commands/spectra-archive.md
+  - src/types/reportWorkspace.ts
+  - src/components/PresentationPage/index.ts
+  - .opencode/commands/spectra-ingest.md
+  - .opencode/commands/spectra-discuss.md
+  - AGENTS.md
+  - src/styles/meetingSurface.ts
+  - .agents/skills/spectra-debug/SKILL.md
+  - .agents/skills/spectra-ask/SKILL.md
+  - .agents/skills/spectra-propose/SKILL.md
+  - vite.config.ts
+  - .opencode/commands/spectra-debug.md
+  - .agents/skills/spectra-discuss/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - .opencode/skills/spectra-propose/SKILL.md
+  - .opencode/skills/spectra-ask/SKILL.md
+  - .agents/skills/spectra-audit/SKILL.md
+  - .opencode/skills/spectra-discuss/SKILL.md
+  - CLAUDE.md
+  - src/components/PresentationPage/PresentationPage.tsx
+  - .opencode/skills/spectra-audit/SKILL.md
+  - .agents/skills/spectra-apply/SKILL.md
+tests:
+  - src/components/PresentationPage/PresentationPage.test.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/test/setup.ts
+  - src/App.test.tsx
+  - src/test/smoke.test.ts
+-->
+
+
+<!-- @trace
+source: redesign-meeting-presentation-slides
+updated: 2026-03-25
+code:
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/App.tsx
+tests:
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/components/PresentationPage/PresentationPage.test.tsx
+  - src/App.test.tsx
 -->
 
 ---
 ### Requirement: Presentation respects selected version snapshot
 
-The system SHALL keep displayed content stable to the currently loaded snapshot during the meeting session.
+The system SHALL keep displayed content stable to the currently loaded snapshot during the meeting session, including during overtime editing windows, until the session is reloaded or version context is intentionally changed by defined workflow.
 
-#### Scenario: Keep meeting content stable
+#### Scenario: Keep meeting content stable while overtime edits occur
 
-- **WHEN** a meeting is in progress on version N
-- **THEN** the presented content remains bound to version N until the session is reloaded or version context is intentionally changed by defined workflow
+- **WHEN** overtime editing is granted for the locked version while a meeting session is already presenting that version
+- **THEN** the visible slide content remains bound to the previously loaded snapshot until the presenter explicitly reloads or re-enters the presentation
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: redesign-meeting-presentation-slides
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/App.tsx
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
@@ -1198,119 +1112,55 @@ tests:
 ---
 ### Requirement: Footer remains fixed with minimal context fields
 
-The system SHALL keep footer visible during report body and SHALL display only current department, current section, version, and lock status.
+The system SHALL keep a fixed footer in meeting presentation mode and SHALL display only the current slide index over the total slide count in `current/total` format.
 
-#### Scenario: View fixed footer in report body
+#### Scenario: Show current slide index in fixed footer
 
-- **WHEN** presenter scrolls through report body
-- **THEN** footer remains fixed and shows department, section, version, and lock status context
+- **WHEN** the presenter is viewing slide 2 of a 13-slide meeting deck
+- **THEN** the footer shows `2/13`
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: refine-presentation-page-context
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
   - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
+  - nul
+  - src/assets/images/logo.png
+  - src/App.tsx
+  - src/styles/meetingSurface.ts
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
 tests:
+  - src/App.test.tsx
   - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
 ### Requirement: Footer excludes page count and clock
 
-The system SHALL NOT display page count or current clock time in footer.
+The system SHALL NOT display page title, page type, current clock time, version text, or lock status in the footer, and SHALL use the footer only for slide index over total count.
 
-#### Scenario: Inspect footer content set
+#### Scenario: Inspect footer content while viewing a slide
 
-- **WHEN** footer is rendered
-- **THEN** footer content excludes page numbering and current time fields
+- **WHEN** the presenter is viewing any slide in report playback mode
+- **THEN** the footer excludes page title, page type, current time, version text, and lock status while keeping only `current/total` page count
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
+source: refine-presentation-page-context
 updated: 2026-03-25
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
   - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
+  - nul
+  - src/assets/images/logo.png
+  - src/App.tsx
+  - src/styles/meetingSurface.ts
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
 tests:
+  - src/App.test.tsx
   - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---

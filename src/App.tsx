@@ -32,8 +32,10 @@ const drawerWidth = 260;
 // 主應用程式
 const App: React.FC = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [isPresentationFullscreen, setIsPresentationFullscreen] = React.useState(false);
   const theme = useTheme();
   const location = useLocation();
+  const hideChrome = location.pathname === '/presentation' && isPresentationFullscreen;
 
   const menuItems = [
     // { text: '專案總覽', icon: <DashboardIcon />, path: '/' },
@@ -181,9 +183,10 @@ const App: React.FC = () => {
   return (
     <Box sx={{ display: 'flex' }}>
       {/* Top Bar */}
-      <AppBar
+      {!hideChrome && <AppBar
         position="fixed"
         elevation={0}
+        data-testid="app-header"
         sx={{
           width: { md: `calc(100% - ${drawerWidth}px)` },
           ml: { md: `${drawerWidth}px` },
@@ -211,10 +214,10 @@ const App: React.FC = () => {
             </Typography>
           </Box>
         </Toolbar>
-      </AppBar>
+      </AppBar>}
 
       {/* Navigation Drawer */}
-      <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
+      {!hideChrome && <Box component="nav" data-testid="app-sidebar" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
         {/* Mobile drawer */}
         <Drawer
           variant="temporary"
@@ -250,7 +253,7 @@ const App: React.FC = () => {
         >
           {drawer}
         </Drawer>
-      </Box>
+      </Box>}
 
       {/* Main Content */}
       <Box
@@ -261,18 +264,18 @@ const App: React.FC = () => {
           bgcolor: 'background.default',
         }}
       >
-        <Toolbar />
+        {!hideChrome && <Toolbar />}
         <Container
-          maxWidth="xl"
+          maxWidth={hideChrome ? false : 'xl'}
           sx={{
-            py: 3,
+            py: hideChrome ? 0 : 3,
             px: { xs: 2, sm: 3 },
           }}
         >
           <Routes>
             <Route path="/" element={<ReportWorkspacePage />} />
             <Route path="/report-workspace" element={<ReportWorkspacePage />} />
-            <Route path="/presentation" element={<PresentationPage />} />
+            <Route path="/presentation" element={<PresentationPage onFullscreenChange={setIsPresentationFullscreen} />} />
           </Routes>
         </Container>
       </Box>

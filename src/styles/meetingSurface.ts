@@ -28,3 +28,9 @@ export const meetingDesktopNoticeSx: SxProps<Theme> = {
   color: 'text.secondary',
   fontSize: '0.8125rem',
 };
+
+export const meetingSlideSectionSx: SxProps<Theme> = {
+  py: 1.5,
+  borderBottom: '1px solid',
+  borderColor: 'divider',
+};

@@ -8,42 +8,38 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
+  Divider,
+  Drawer,
   MenuItem,
+  List,
+  ListItemButton,
+  ListItemText,
   Paper,
-  Tab,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, ArrowForward as ArrowForwardIcon, Close as CloseIcon } from '@mui/icons-material';
 import { initialReportWorkspaceState } from '../../mock/reportWorkspaceData';
-import {
-  ReportFields,
-  ReportWorkspaceProject,
-  ReportWorkspaceState,
-  WorkspaceImageItem,
-  WorkspaceDepartment,
-  WorkspacePage,
-} from '../../types/reportWorkspace';
+import { ReportFields, ReportWorkspaceProject, ReportWorkspaceState, WorkspaceDepartment, WorkspacePage } from '../../types/reportWorkspace';
 import {
   meetingDesktopNoticeSx,
   meetingHeaderSx,
   meetingHintTextSx,
+  meetingSlideSectionSx,
   meetingSurfaceSx,
 } from '../../styles/meetingSurface';
 
 interface PresentationPageProps {
   project?: ReportWorkspaceProject;
-}
-
-interface PresentationLightboxState {
-  title: string;
-  images: WorkspaceImageItem[];
-  currentIndex: number;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
 }
 
 type SignInMode = 'self' | 'proxy' | 'correction' | 'backfill';
+
+interface PresentationSlide {
+  id: string;
+  department: WorkspaceDepartment;
+  page: WorkspacePage;
+}
 
 const STORAGE_KEY = 'report-workspace-state';
 
@@ -81,15 +77,6 @@ const getSortedPages = (pages: WorkspacePage[]): WorkspacePage[] => {
   return [...pages].sort((a, b) => a.order - b.order);
 };
 
-const reportFieldLabels: Array<{ key: keyof ReportFields; label: string }> = [
-  { key: 'workItem', label: '工作項目' },
-  { key: 'plannedBuildDate', label: '預計完成日(掛建日)' },
-  { key: 'approvalDate', label: '預計完成日(核准日)' },
-  { key: 'weeklyStatusAndRisk', label: '本周、下周辦理情形暨工作預警狀況說明' },
-  { key: 'supportPlan', label: '建請協助方案（公關機制/跨部門協調）' },
-  { key: 'executiveDiscussion', label: '待層峰討論 & 決議' },
-];
-
 const getAttendanceStatusLabel = (status: 'on_time' | 'late' | 'absent') => {
   if (status === 'late') {
     return '遲到';
@@ -111,7 +98,7 @@ const getDisplayStatusLabel = (
   return getAttendanceStatusLabel(status);
 };
 
-export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) => {
+export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onFullscreenChange }) => {
   const resolvedProject = useMemo(() => project ?? resolveProjectFromStorage(), [project]);
   const latestLockedVersion = useMemo(() => getLatestLockedVersion(resolvedProject), [resolvedProject]);
   const [snapshotVersionId, setSnapshotVersionId] = useState<string>(latestLockedVersion?.id ?? '');
@@ -122,13 +109,22 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
   const lockedSnapshotVersion = snapshotVersion?.isLocked ? snapshotVersion : latestLockedVersion;
   const departments = useMemo(() => getActiveDepartments(resolvedProject), [resolvedProject]);
   const sortedPages = useMemo(() => getSortedPages(lockedSnapshotVersion?.pages ?? []), [lockedSnapshotVersion?.pages]);
-  const [activeDepartmentTab, setActiveDepartmentTab] = useState(departments[0]?.id ?? '');
+  const slides = useMemo<PresentationSlide[]>(() => {
+    return departments.flatMap((department) =>
+      sortedPages.map((page) => ({
+        id: `${department.id}:${page.id}`,
+        department,
+        page,
+      }))
+    );
+  }, [departments, sortedPages]);
   const [mode, setMode] = useState<'cover' | 'report'>('cover');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fontMode, setFontMode] = useState<'normal' | 'large'>('normal');
   const [isToolbarVisible, setIsToolbarVisible] = useState(true);
+  const [isSlideDrawerOpen, setIsSlideDrawerOpen] = useState(false);
+  const [activeSlideId, setActiveSlideId] = useState(slides[0]?.id ?? '');
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
-  const [lightbox, setLightbox] = useState<PresentationLightboxState | null>(null);
   const [signInDialogOpen, setSignInDialogOpen] = useState(false);
   const [signInMode, setSignInMode] = useState<SignInMode>('self');
   const [signInName, setSignInName] = useState('');
@@ -139,7 +135,6 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
   const [signInFeedback, setSignInFeedback] = useState('');
   const [attendanceState, setAttendanceState] = useState(resolvedProject.attendance);
 
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const toolbarHideTimerRef = useRef<number | null>(null);
 
   const clearToolbarTimer = () => {
@@ -174,6 +169,10 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
   };
 
   useEffect(() => {
+    onFullscreenChange?.(isFullscreen);
+  }, [isFullscreen, onFullscreenChange]);
+
+  useEffect(() => {
     return () => {
       clearToolbarTimer();
     };
@@ -182,6 +181,35 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
   useEffect(() => {
     setSnapshotVersionId(latestLockedVersion?.id ?? '');
   }, [resolvedProject.id]);
+
+  useEffect(() => {
+    if (!slides.some((slide) => slide.id === activeSlideId)) {
+      setActiveSlideId(slides[0]?.id ?? '');
+    }
+  }, [activeSlideId, slides]);
+
+  useEffect(() => {
+    if (mode !== 'report') {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const currentIndex = slides.findIndex((slide) => slide.id === activeSlideId);
+
+      if (event.key === 'ArrowRight' && currentIndex >= 0 && currentIndex < slides.length - 1) {
+        event.preventDefault();
+        setActiveSlideId(slides[currentIndex + 1]?.id ?? activeSlideId);
+      }
+
+      if (event.key === 'ArrowLeft' && currentIndex > 0) {
+        event.preventDefault();
+        setActiveSlideId(slides[currentIndex - 1]?.id ?? activeSlideId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeSlideId, mode, slides]);
 
   useEffect(() => {
     setAttendanceState(resolvedProject.attendance);
@@ -195,10 +223,8 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
     setSignInFeedback('');
   }, [resolvedProject]);
 
-  const handleJumpDepartment = (departmentId: string) => {
-    setActiveDepartmentTab(departmentId);
-    sectionRefs.current[departmentId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
+  const activeSlideIndex = slides.findIndex((slide) => slide.id === activeSlideId);
+  const activeSlide = activeSlideIndex >= 0 ? slides[activeSlideIndex] : slides[0];
 
   const summaryLines = Math.max(1, resolvedProject.presentation.summaryLines || 4);
 
@@ -552,11 +578,139 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
   }
 
   const fontScale = fontMode === 'large' ? 1.2 : 1;
-  const currentLightboxImage = lightbox ? lightbox.images[lightbox.currentIndex] : null;
+  const currentSlide = activeSlide ?? slides[0];
+  const canGoPrev = activeSlideIndex > 0;
+  const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
+
+  const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
+    const expansionKey = buildFieldExpansionKey(departmentId, pageId, field);
+    const isExpanded = expandedFields[expansionKey] ?? false;
+    return (
+      <Box sx={meetingSlideSectionSx}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          {label}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: `${0.95 * fontScale}rem`,
+            lineHeight: 1.7,
+            whiteSpace: 'pre-wrap',
+            ...(isExpanded
+              ? {}
+              : {
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: '-webkit-box',
+                  WebkitBoxOrient: 'vertical',
+                  WebkitLineClamp: summaryLines,
+                }),
+          }}
+        >
+          {value.trim() || '（未填寫）'}
+        </Typography>
+        {shouldShowExpand(value) && (
+          <Button
+            variant="text"
+            size="small"
+            sx={{ mt: 0.5, px: 0 }}
+            onClick={() =>
+              setExpandedFields((prev) => ({
+                ...prev,
+                [expansionKey]: !isExpanded,
+              }))
+            }
+          >
+            {isExpanded ? '收合全文' : '展開全文'}
+          </Button>
+        )}
+      </Box>
+    );
+  };
+
+  const renderSlideContent = () => {
+    if (!currentSlide) {
+      return null;
+    }
+
+    const { department, page } = currentSlide;
+
+    if (page.type === 'report') {
+      const block = page.blocks.find((item) => item.departmentId === department.id);
+      if (!block) {
+        return <Typography color="text.secondary">此部門尚無報表內容。</Typography>;
+      }
+
+      return (
+        <Box sx={{ display: 'grid', gap: 0 }}>
+          {renderReportField(department.id, page.id, 'workItem', '工作項目', block.fields.workItem)}
+          {renderReportField(
+            department.id,
+            page.id,
+            'weeklyStatusAndRisk',
+            '本周、下周辦理情形暨工作預警狀況說明',
+            block.fields.weeklyStatusAndRisk
+          )}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, ...meetingSlideSectionSx }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                預計完成日(掛建日)
+              </Typography>
+              <Typography variant="body1" sx={{ fontSize: `${1.05 * fontScale}rem`, fontWeight: 600 }}>
+                {block.fields.plannedBuildDate.trim() || '（未填寫）'}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                預計完成日(核准日)
+              </Typography>
+              <Typography variant="body1" sx={{ fontSize: `${1.05 * fontScale}rem`, fontWeight: 600 }}>
+                {block.fields.approvalDate.trim() || '（未填寫）'}
+              </Typography>
+            </Box>
+          </Box>
+          {renderReportField(department.id, page.id, 'supportPlan', '建請協助方案（公關機制/跨部門協調）', block.fields.supportPlan)}
+          <Box sx={{ pt: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              待層峰討論 & 決議
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: `${0.95 * fontScale}rem`, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              {block.fields.executiveDiscussion.trim() || '（未填寫）'}
+            </Typography>
+          </Box>
+        </Box>
+      );
+    }
+
+    const group = page.groups.find((item) => item.departmentId === department.id);
+    const image = [...(group?.images ?? [])].sort((a, b) => a.order - b.order)[0];
+
+    if (!image) {
+      return <Typography color="text.secondary">尚未上傳圖片。</Typography>;
+    }
+
+    return (
+      <Box sx={{ display: 'grid', gap: 2 }}>
+        <Box
+          component="img"
+          src={image.url}
+          alt={image.name}
+          sx={{ width: '100%', minHeight: 320, maxHeight: '60vh', objectFit: 'contain', borderRadius: 2, bgcolor: 'grey.50' }}
+        />
+        <Divider />
+        <Box>
+          <Typography variant="body2" sx={{ fontSize: `${0.95 * fontScale}rem`, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+            圖片備註：{image.note.trim() || '（無）'}
+          </Typography>
+        </Box>
+      </Box>
+    );
+  };
 
   return (
     <Box
       data-font-mode={fontMode}
+      onMouseMove={isFullscreen ? revealToolbar : undefined}
       sx={{
         display: 'grid',
         gap: 2,
@@ -568,17 +722,11 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
         <Box
           data-testid="fullscreen-toolbar-reveal"
           onMouseEnter={revealToolbar}
-          sx={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 16,
-            zIndex: 1201,
-            cursor: 'n-resize',
-          }}
+          onMouseMove={revealToolbar}
+          sx={{ position: 'fixed', top: 0, left: 0, right: 0, height: 20, zIndex: 1201 }}
         />
       )}
+
       <Paper
         data-testid="presentation-toolbar"
         data-meeting-surface="true"
@@ -591,7 +739,6 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
           top: 0,
           zIndex: 1200,
           bgcolor: 'background.paper',
-          transition: 'opacity 0.2s ease',
         }}
       >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
@@ -605,15 +752,20 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
         </Typography>
         <Typography sx={meetingDesktopNoticeSx}>此頁優先針對桌機與投影會議閱讀體驗設計。</Typography>
 
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
+          <Button variant="outlined" size="small" onClick={() => setActiveSlideId(slides[activeSlideIndex - 1]?.id ?? activeSlideId)} disabled={!canGoPrev}>
+            上一張
+          </Button>
+          <Button variant="outlined" size="small" onClick={() => setActiveSlideId(slides[activeSlideIndex + 1]?.id ?? activeSlideId)} disabled={!canGoNext}>
+            下一張
+          </Button>
+          <Button variant="outlined" size="small" onClick={() => setIsSlideDrawerOpen(true)}>
+            投影片目錄
+          </Button>
           <Button variant="outlined" size="small" onClick={handleToggleFullscreen}>
             {isFullscreen ? '離開全螢幕' : '全螢幕'}
           </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => setFontMode((prev) => (prev === 'normal' ? 'large' : 'normal'))}
-          >
+          <Button variant="outlined" size="small" onClick={() => setFontMode((prev) => (prev === 'normal' ? 'large' : 'normal'))}>
             {fontMode === 'normal' ? '大字' : '一般字'}
           </Button>
           <Button
@@ -629,242 +781,45 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project }) =
             回封面
           </Button>
         </Box>
-
-        <Tabs
-          aria-label="部門導覽"
-          value={activeDepartmentTab}
-          onChange={(_, value) => handleJumpDepartment(value)}
-          variant="scrollable"
-          allowScrollButtonsMobile
-        >
-          {departments.map((department) => (
-            <Tab key={department.id} value={department.id} label={department.name} />
-          ))}
-        </Tabs>
       </Paper>
 
-      <Paper elevation={0} sx={{ p: 2, ...meetingSurfaceSx }}>
-        {departments.map((department) => (
-          <Box
-            key={department.id}
-            ref={(node) => {
-              sectionRefs.current[department.id] = node as HTMLDivElement | null;
-            }}
-            sx={{ mb: 3 }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, fontSize: `${1.25 * fontScale}rem` }}>
-              {department.name}
-            </Typography>
-            {sortedPages.map((page) => (
-              <Box key={`${department.id}-${page.id}`} sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: `${0.875 * fontScale}rem` }}>
-                  {page.name}
-                </Typography>
-                {page.type === 'report' ? (
-                  <Box sx={{ mt: 0.75, display: 'grid', gap: 1 }}>
-                    {(() => {
-                      const block = page.blocks.find((item) => item.departmentId === department.id);
-                      if (!block) {
-                        return (
-                          <Typography variant="body2" color="text.secondary">
-                            此部門尚無報表內容。
-                          </Typography>
-                        );
-                      }
-
-                      return reportFieldLabels.map((fieldMeta) => {
-                        const key = buildFieldExpansionKey(department.id, page.id, fieldMeta.key);
-                        const isExpanded = expandedFields[key] ?? false;
-                        const value = block.fields[fieldMeta.key].trim();
-                        return (
-                          <Box key={key} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                              {fieldMeta.label}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="text.primary"
-                              sx={{
-                                fontSize: `${0.875 * fontScale}rem`,
-                                ...(isExpanded
-                                  ? {}
-                                  : {
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    display: '-webkit-box',
-                                    WebkitBoxOrient: 'vertical',
-                                    WebkitLineClamp: summaryLines,
-                                  }),
-                              }}
-                            >
-                              {value || '（未填寫）'}
-                            </Typography>
-                            {shouldShowExpand(value) && (
-                              <Button
-                                variant="text"
-                                size="small"
-                                sx={{ mt: 0.5, px: 0 }}
-                                onClick={() =>
-                                  setExpandedFields((prev) => ({
-                                    ...prev,
-                                    [key]: !isExpanded,
-                                  }))
-                                }
-                              >
-                                {isExpanded ? '收合全文' : '展開全文'}
-                              </Button>
-                            )}
-                          </Box>
-                        );
-                      });
-                    })()}
-                  </Box>
-                ) : (
-                  <Box sx={{ mt: 0.75, display: 'grid', gap: 1 }}>
-                    {(() => {
-                      const group = page.groups.find((item) => item.departmentId === department.id);
-                      const images = [...(group?.images ?? [])].sort((a, b) => a.order - b.order);
-                      const previews = images.slice(0, 4);
-
-                      if (images.length === 0) {
-                        return (
-                          <Typography variant="body2" color="text.secondary" sx={{ fontSize: `${0.875 * fontScale}rem` }}>
-                            尚未上傳圖片。
-                          </Typography>
-                        );
-                      }
-
-                      return (
-                        <>
-                          <Box sx={{ display: 'grid', gap: 1, gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' } }}>
-                            {previews.map((image) => (
-                              <Box
-                                key={image.id}
-                                component="img"
-                                src={image.url}
-                                alt={image.name}
-                                sx={{
-                                  width: '100%',
-                                  height: 140,
-                                  objectFit: 'cover',
-                                  borderRadius: 1,
-                                  border: '1px solid',
-                                  borderColor: 'divider',
-                                }}
-                              />
-                            ))}
-                          </Box>
-                          <Button
-                            variant="text"
-                            size="small"
-                            sx={{ width: 'fit-content', px: 0 }}
-                            onClick={() =>
-                              setLightbox({
-                                title: `${department.name} / ${page.name}`,
-                                images,
-                                currentIndex: 0,
-                              })
-                            }
-                          >
-                            查看全部 ({images.length})
-                          </Button>
-                        </>
-                      );
-                    })()}
-                  </Box>
-                )}
-              </Box>
+      <Drawer anchor="left" open={isSlideDrawerOpen} onClose={() => setIsSlideDrawerOpen(false)}>
+        <Box sx={{ width: 320, p: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            投影片目錄
+          </Typography>
+          <List>
+            {slides.map((slide, index) => (
+              <ListItemButton
+                key={slide.id}
+                selected={slide.id === currentSlide?.id}
+                onClick={() => {
+                  setActiveSlideId(slide.id);
+                  setIsSlideDrawerOpen(false);
+                }}
+              >
+                <ListItemText primary={`${index + 1}. ${slide.department.name} / ${slide.page.name}`} />
+              </ListItemButton>
             ))}
-          </Box>
-        ))}
+          </List>
+        </Box>
+      </Drawer>
+
+      <Paper elevation={0} sx={{ p: 3, ...meetingSurfaceSx }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5, fontSize: `${1.4 * fontScale}rem` }}>
+          {currentSlide?.department.name ?? '-'}
+        </Typography>
+        <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 2 }}>
+          {currentSlide?.page.name ?? '-'}
+        </Typography>
+        {renderSlideContent()}
       </Paper>
 
-      <Paper
-        data-meeting-surface="true"
-        elevation={0}
-        sx={{
-          p: 1.5,
-          ...meetingSurfaceSx,
-          position: 'sticky',
-          bottom: 0,
-        }}
-      >
-        <Typography variant="body2" color="text.secondary">
-          部門：{departments.find((department) => department.id === activeDepartmentTab)?.name ?? '-'} | 章節：
-          {sortedPages[0]?.name ?? '-'} | 版本：v{lockedSnapshotVersion.versionNo} | 狀態：已鎖定
+      <Paper data-meeting-surface="true" elevation={0} sx={{ p: 1.5, ...meetingSurfaceSx, position: 'sticky', bottom: 0 }}>
+        <Typography variant="body2" color="text.secondary" data-testid="presentation-footer">
+          {activeSlideIndex + 1}/{slides.length}
         </Typography>
       </Paper>
-
-      <Dialog
-        open={!!lightbox}
-        onClose={() => setLightbox(null)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            {lightbox?.title ?? '圖片檢視'}
-          </Typography>
-          <IconButton size="small" onClick={() => setLightbox(null)} aria-label="關閉圖片檢視">
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          {!currentLightboxImage ? null : (
-            <Box sx={{ display: 'grid', gap: 1.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<ArrowBackIcon />}
-                  disabled={!lightbox || lightbox.currentIndex <= 0}
-                  onClick={() =>
-                    setLightbox((prev) => {
-                      if (!prev || prev.currentIndex <= 0) {
-                        return prev;
-                      }
-                      return { ...prev, currentIndex: prev.currentIndex - 1 };
-                    })
-                  }
-                >
-                  上一張
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  {(lightbox?.currentIndex ?? 0) + 1} / {lightbox?.images.length ?? 0}
-                </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  endIcon={<ArrowForwardIcon />}
-                  disabled={!lightbox || lightbox.currentIndex >= lightbox.images.length - 1}
-                  onClick={() =>
-                    setLightbox((prev) => {
-                      if (!prev || prev.currentIndex >= prev.images.length - 1) {
-                        return prev;
-                      }
-                      return { ...prev, currentIndex: prev.currentIndex + 1 };
-                    })
-                  }
-                >
-                  下一張
-                </Button>
-              </Box>
-              <Box
-                component="img"
-                src={currentLightboxImage.url}
-                alt={currentLightboxImage.name}
-                sx={{ width: '100%', maxHeight: '65vh', objectFit: 'contain', borderRadius: 1 }}
-              />
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {currentLightboxImage.name}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                圖片備註：{currentLightboxImage.note || '（無）'}
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-      </Dialog>
     </Box>
   );
 };

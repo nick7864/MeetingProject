@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createWorkspaceProject } from '../../mock/reportWorkspaceData';
 import { PresentationPage } from './PresentationPage';
@@ -15,7 +15,7 @@ describe('PresentationPage', () => {
     expect(screen.getByText('尚未有鎖定版本')).toBeInTheDocument();
   });
 
-  it('renders toolbar and department flow for latest locked version', () => {
+  it('renders slide navigation controls for latest locked version', () => {
     const project = createWorkspaceProject('project-test', '專案測試');
     const lockedVersion = {
       ...project.versions[0],
@@ -33,10 +33,10 @@ describe('PresentationPage', () => {
     expect(screen.getByRole('button', { name: '全螢幕' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '大字' })).toBeInTheDocument();
     expect(screen.getByText('v3 (已鎖定)')).toBeInTheDocument();
-
-    const tablist = screen.getByRole('tablist', { name: '部門導覽' });
-    const tabs = within(tablist).getAllByRole('tab');
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['業務部', '研發部', '營運部', '公關部']);
+    expect(screen.getByRole('button', { name: '上一張' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '下一張' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '投影片目錄' })).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: '部門導覽' })).not.toBeInTheDocument();
   });
 
   it('blocks report start when cover metadata is incomplete', () => {
@@ -68,10 +68,7 @@ describe('PresentationPage', () => {
     expect(screen.getByRole('button', { name: '開始報告' })).toBeInTheDocument();
   });
 
-  it('scrolls to department section when department tab clicked', () => {
-    const scrollSpy = vi.fn();
-    window.HTMLElement.prototype.scrollIntoView = scrollSpy;
-
+  it('navigates slides with previous and next controls', () => {
     const project = createWorkspaceProject('project-test', '專案測試');
     project.versions = [
       {
@@ -85,9 +82,33 @@ describe('PresentationPage', () => {
 
     render(<PresentationPage project={project} />);
     fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
-    fireEvent.click(screen.getByRole('tab', { name: '研發部' }));
 
-    expect(scrollSpy).toHaveBeenCalled();
+    expect(screen.getByText('業務部')).toBeInTheDocument();
+    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '下一張' }));
+    expect(screen.getByText('純圖片顯示-page2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '上一張' }));
+    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+  });
+
+  it('navigates slides with left and right arrow keys', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 22 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
+    project.presentation.cover.versionInfo = 'v22 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByText('純圖片顯示-page2')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
   });
 
   it('auto-hides toolbar in fullscreen and reveals it from top boundary', () => {
@@ -171,7 +192,7 @@ describe('PresentationPage', () => {
     expect(screen.getAllByRole('button', { name: '展開全文' })[0]).toBeInTheDocument();
   });
 
-  it('shows image previews and lightbox notes by default', () => {
+  it('shows a single image with inline note on image slides', () => {
     const project = createWorkspaceProject('project-test', '專案測試');
     const imagePage = project.versions[0].pages.find((page) => page.type === 'image');
     if (!imagePage || imagePage.type !== 'image') {
@@ -182,14 +203,16 @@ describe('PresentationPage', () => {
       group.departmentId === 'dept-1'
         ? {
           ...group,
-          images: [1, 2, 3, 4, 5].map((index) => ({
-            id: `img-${index}`,
-            url: `https://example.com/${index}.jpg`,
-            name: `會議圖片${index}`,
-            note: `備註 ${index}`,
-            order: index,
-            uploadedAt: '2026-03-25T00:00:00.000Z',
-          })),
+          images: [
+            {
+              id: 'img-1',
+              url: 'https://example.com/1.jpg',
+              name: '會議圖片1',
+              note: '備註 1',
+              order: 1,
+              uploadedAt: '2026-03-25T00:00:00.000Z',
+            },
+          ],
         }
         : group
     );
@@ -200,16 +223,11 @@ describe('PresentationPage', () => {
 
     render(<PresentationPage project={project} />);
     fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
-
-    expect(screen.getByRole('button', { name: '查看全部 (5)' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '會議圖片1' })).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: '會議圖片5' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '查看全部 (5)' }));
-    expect(screen.getByText('圖片備註：備註 1')).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: '下一張' }));
-    expect(screen.getByText('圖片備註：備註 2')).toBeInTheDocument();
+
+    expect(screen.getByRole('img', { name: '會議圖片1' })).toBeInTheDocument();
+    expect(screen.getByText('圖片備註：備註 1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /查看全部/ })).not.toBeInTheDocument();
   });
 
   it('keeps cover in minimalist style without logo, attendance stats, or note input', () => {
@@ -277,7 +295,7 @@ describe('PresentationPage', () => {
     expect(screen.getByText('此頁優先針對桌機與投影會議閱讀體驗設計。')).toBeInTheDocument();
   });
 
-  it('keeps a fixed footer with minimal context fields only', () => {
+  it('keeps a fixed footer with current slide context only', () => {
     const project = createWorkspaceProject('project-test', '專案測試');
     project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 20 }];
     project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
@@ -286,8 +304,31 @@ describe('PresentationPage', () => {
     render(<PresentationPage project={project} />);
     fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
 
-    expect(screen.getByText('部門：業務部 | 章節：一般報表-page1 | 版本：v20 | 狀態：已鎖定')).toBeInTheDocument();
-    expect(screen.queryByText(/頁碼|時鐘/)).not.toBeInTheDocument();
+    const footer = screen.getByTestId('presentation-footer');
+    expect(footer).toHaveTextContent('1/8');
+    expect(screen.queryByText(/部門：|頁面：|版本：|狀態：/)).not.toBeInTheDocument();
+  });
+
+  it('updates footer page index when navigating slides', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 20 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
+    project.presentation.cover.versionInfo = 'v20 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    const footer = screen.getByTestId('presentation-footer');
+    expect(footer).toHaveTextContent('1/8');
+
+    fireEvent.click(screen.getByRole('button', { name: '下一張' }));
+    expect(footer).toHaveTextContent('2/8');
+
+    fireEvent.click(screen.getByRole('button', { name: '下一張' }));
+    expect(footer).toHaveTextContent('3/8');
+
+    fireEvent.click(screen.getByRole('button', { name: '上一張' }));
+    expect(footer).toHaveTextContent('2/8');
   });
 
   it('uses unified meeting surface marker across cover and report toolbar', () => {

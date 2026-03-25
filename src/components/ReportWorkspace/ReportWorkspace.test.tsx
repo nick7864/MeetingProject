@@ -642,4 +642,32 @@ describe('ReportWorkspacePage backend management tab', () => {
     expect(workItemInput.value.length).toBe(1200);
     expect(screen.getByText('此欄位為歷史超限內容，請先手動刪減。')).toBeInTheDocument();
   });
+
+  it('rejects uploading a second image to the same pure image page', () => {
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL')
+      .mockReturnValueOnce('blob:first-image')
+      .mockReturnValueOnce('blob:second-image');
+
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '純圖片顯示-page2' }));
+
+    const uploadInput = document.querySelector('input[type="file"]') as HTMLInputElement | null;
+    if (!uploadInput) {
+      throw new Error('upload input not found');
+    }
+
+    const firstFile = new File(['first'], 'first.png', { type: 'image/png' });
+    const secondFile = new File(['second'], 'second.png', { type: 'image/png' });
+
+    fireEvent.change(uploadInput, { target: { files: [firstFile] } });
+    expect(screen.getByText('first.png')).toBeInTheDocument();
+
+    fireEvent.change(uploadInput, { target: { files: [secondFile] } });
+
+    expect(screen.getByText('每個純圖片頁面只能上傳一張圖片，請新增頁面放置其他圖片。')).toBeInTheDocument();
+    expect(screen.queryByText('second.png')).not.toBeInTheDocument();
+
+    createObjectUrlSpy.mockRestore();
+  });
 });
