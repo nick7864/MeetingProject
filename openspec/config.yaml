@@ -1,0 +1,97 @@
+schema: spec-driven
+
+context: |
+  # 專案立會資訊系統 - 報表工作台前端原型
+  
+  ## 專案說明
+  
+  此專案為 React + TypeScript + Material-UI 的前端原型，現在聚焦在「報表工作台」單一場景。系統以專案為群組，支援版本化報表、部門填報、純圖片頁與 AI 聊天分析。
+  
+  ## 目前功能
+  
+  - 專案切換與專案管理邏輯（新增、重新命名、封存）
+  - 版本管理（可鎖定目前版本並自動複製新版本）
+  - 頁面模板
+    - 一般報表頁（依部門填寫）
+    - 純圖片頁（依部門分組，上傳/排序/刪除/註解/放大預覽）
+  - 權限顯示
+    - 管理員可見部門設定與部門完成度
+    - 非管理員僅看當前部門一般報表內容
+  - 一般報表欄位
+    - 工作項目
+    - 預計完成日(掛建日)
+    - 預計完成日(核准日)
+    - 本周、下周辦理情形暨工作預警狀況說明
+    - 建請協助方案（公關機制/跨部門協調）
+    - 待層峰討論 & 決議
+  
+  ## 技術棧
+  
+  - React 18
+  - TypeScript
+  - Material-UI v5
+  - React Router v6
+  - Vite
+  
+  ## 快速開始
+  
+  ```bash
+  npm install
+  npm run dev
+  ```
+  
+  預設開發網址為 Vite 顯示的本機位址（常見為 `http://127.0.0.1:5173`）。
+  
+  ```bash
+  npm run build
+  ```
+  
+  ## 路由
+  
+  - `/`：報表工作台
+  - `/report-workspace`：報表工作台
+  
+  ## 目前目錄重點
+  
+  ```text
+  src/
+    App.tsx
+    main.tsx
+    components/
+      ReportWorkspace/
+        ReportWorkspace.tsx
+        index.ts
+    mock/
+      reportWorkspaceData.ts
+    types/
+      reportWorkspace.ts
+    styles/
+      theme.ts
+      global.css
+  ```
+  
+  ## 注意事項
+  
+  - 此版本為前端 Demo，使用本地 mock state，尚未串接後端 API。
+  - 封存專案為軟封存（資料保留，預設不顯示於專案切換清單）。
+locale: tw
+tdd: true
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

@@ -18,6 +18,8 @@ export interface ReportFields {
   executiveDiscussion: string;
 }
 
+export type ReportFieldLimits = Record<keyof ReportFields, number>;
+
 export interface DepartmentReportBlock {
   departmentId: string;
   fields: ReportFields;
@@ -63,8 +65,67 @@ export interface WorkspaceVersion {
   versionNo: number;
   isLocked: boolean;
   createdAt: string;
+  lockedAt?: string;
+  lockType?: 'manual' | 'scheduled';
+  overtimeUnlockUntil?: string;
+  overtimeReason?: string;
   sourceVersionId?: string;
   pages: WorkspacePage[];
+}
+
+export interface ProjectMeetingLockConfig {
+  lockAt: string;
+  timezone: string;
+}
+
+export interface LockAuditEvent {
+  id: string;
+  action: 'manual_lock' | 'scheduled_lock' | 'overtime_grant' | 'overtime_expire';
+  actorRole: WorkspaceRole;
+  versionId: string;
+  at: string;
+  reason?: string;
+  expiresAt?: string;
+}
+
+export interface AttendanceExpectedMember {
+  id: string;
+  departmentId: string;
+  name: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  sessionId: string;
+  memberId: string;
+  departmentId: string;
+  memberName: string;
+  signedAt: string;
+  status: 'on_time' | 'late' | 'absent';
+  actorRole: WorkspaceRole;
+  actorName: string;
+  mode: 'self' | 'proxy' | 'correction' | 'backfill';
+  reason?: string;
+  isOverdueBackfill?: boolean;
+  correctionOfRecordId?: string;
+  voidedAt?: string;
+  voidReason?: string;
+}
+
+export interface AttendanceSession {
+  id: string;
+  startedAt?: string;
+  closedAt?: string;
+  rosterFrozenAt?: string;
+  expectedRoster: AttendanceExpectedMember[];
+  records: AttendanceRecord[];
+}
+
+export interface AttendanceState {
+  activeSessionId: string;
+  signInOpenedAt?: string;
+  signInClosedAt?: string;
+  sessions: AttendanceSession[];
 }
 
 export interface WorkspaceChatMessage {
@@ -72,6 +133,16 @@ export interface WorkspaceChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
+}
+
+export interface PresentationCoverSettings {
+  meetingDateTime: string;
+  versionInfo: string;
+}
+
+export interface PresentationSettings {
+  cover: PresentationCoverSettings;
+  summaryLines: number;
 }
 
 export interface ReportWorkspaceProject {
@@ -87,6 +158,11 @@ export interface ReportWorkspaceProject {
     messages: WorkspaceChatMessage[];
     isLoading: boolean;
   };
+  presentation: PresentationSettings;
+  fieldLimits: ReportFieldLimits;
+  meetingLock: ProjectMeetingLockConfig;
+  lockAuditEvents: LockAuditEvent[];
+  attendance: AttendanceState;
 }
 
 export interface ReportWorkspaceState {

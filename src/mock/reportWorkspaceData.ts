@@ -10,6 +10,7 @@ import {
   WorkspaceReportPage,
   WorkspaceVersion,
 } from '../types/reportWorkspace';
+import { DEFAULT_REPORT_FIELD_LIMITS } from '../constants/reportFieldLimits';
 
 const nowIso = () => new Date().toISOString();
 
@@ -66,6 +67,22 @@ const initialPages = (departments: WorkspaceDepartment[]): WorkspacePage[] => [
   },
 ];
 
+const createInitialAttendanceSession = (id: string, departments: WorkspaceDepartment[]) => {
+  const expectedRoster = departments
+    .filter((department) => department.active)
+    .map((department, index) => ({
+      id: `expected-${id}-${index + 1}`,
+      departmentId: department.id,
+      name: `${department.name}代表`,
+    }));
+
+  return {
+    id,
+    expectedRoster,
+    records: [],
+  };
+};
+
 export const createWorkspaceProject = (id: string, projectName: string): ReportWorkspaceProject => ({
   id,
   projectName,
@@ -93,6 +110,23 @@ export const createWorkspaceProject = (id: string, projectName: string): ReportW
       },
     ],
     isLoading: false,
+  },
+  presentation: {
+    cover: {
+      meetingDateTime: '',
+      versionInfo: '',
+    },
+    summaryLines: 4,
+  },
+  fieldLimits: { ...DEFAULT_REPORT_FIELD_LIMITS },
+  meetingLock: {
+    lockAt: '',
+    timezone: 'Asia/Taipei',
+  },
+  lockAuditEvents: [],
+  attendance: {
+    activeSessionId: `session-${id}-1`,
+    sessions: [createInitialAttendanceSession(`session-${id}-1`, initialDepartments)],
   },
 });
 
@@ -136,11 +170,16 @@ export const createPage = (
 
 export const cloneVersionForNext = (
   currentVersion: WorkspaceVersion,
-  activePageId: string
+  activePageId: string,
+  lockMeta?: { lockedAt: string; lockType: 'manual' | 'scheduled' }
 ): { lockedVersion: WorkspaceVersion; nextVersion: WorkspaceVersion; nextActivePageId: string } => {
   const lockedVersion: WorkspaceVersion = {
     ...currentVersion,
     isLocked: true,
+    lockedAt: lockMeta?.lockedAt ?? nowIso(),
+    lockType: lockMeta?.lockType ?? 'manual',
+    overtimeUnlockUntil: undefined,
+    overtimeReason: undefined,
   };
 
   const nextVersionNo = currentVersion.versionNo + 1;

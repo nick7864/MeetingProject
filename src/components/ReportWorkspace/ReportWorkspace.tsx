@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   alpha,
@@ -43,16 +43,22 @@ import {
   reorderItems,
 } from '../../mock/reportWorkspaceData';
 import {
+  AttendanceExpectedMember,
+  AttendanceRecord,
   DepartmentReportBlock,
+  ReportFieldLimits,
   ReportFields,
   ReportWorkspaceProject,
   ReportWorkspaceState,
+  LockAuditEvent,
   WorkspaceChatMessage,
   WorkspaceDepartment,
   WorkspaceImageItem,
   WorkspacePage,
   WorkspacePageType,
 } from '../../types/reportWorkspace';
+import { meetingHeaderSx, meetingHintTextSx, meetingSurfaceSx } from '../../styles/meetingSurface';
+import { DEFAULT_REPORT_FIELD_LIMITS } from '../../constants/reportFieldLimits';
 
 const fieldsMeta: Array<{ key: keyof ReportFields; label: string; multiline?: number }> = [
   { key: 'workItem', label: '工作項目' },
@@ -63,7 +69,39 @@ const fieldsMeta: Array<{ key: keyof ReportFields; label: string; multiline?: nu
   { key: 'executiveDiscussion', label: '待層峰討論 & 決議', multiline: 3 },
 ];
 
+const fieldLimitLabels: Record<keyof ReportFields, string> = {
+  workItem: '工作項目',
+  plannedBuildDate: '預計完成日(掛建日)',
+  approvalDate: '預計完成日(核准日)',
+  weeklyStatusAndRisk: '本周、下周辦理情形暨工作預警狀況說明',
+  supportPlan: '建請協助方案',
+  executiveDiscussion: '待層峰討論 & 決議',
+};
+
 const nowIso = () => new Date().toISOString();
+const STORAGE_KEY = 'report-workspace-state';
+
+const loadPersistedState = (): ReportWorkspaceState => {
+  if (typeof window === 'undefined') {
+    return initialReportWorkspaceState;
+  }
+
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return initialReportWorkspaceState;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as ReportWorkspaceState;
+    if (!parsed || !Array.isArray(parsed.projects) || typeof parsed.activeProjectId !== 'string') {
+      return initialReportWorkspaceState;
+    }
+    return parsed;
+  } catch (error) {
+    console.warn('Failed to parse persisted report workspace state.', error);
+    return initialReportWorkspaceState;
+  }
+};
 
 const getAssistantReply = (project: ReportWorkspaceProject, userInput: string): string => {
   const activeVersion = project.versions.find((version) => version.id === project.activeVersionId);
@@ -105,9 +143,9 @@ const canEditDepartmentBlock = (
   currentRole: ReportWorkspaceState['currentRole'],
   currentDepartmentId: string,
   block: DepartmentReportBlock,
-  isLocked: boolean
+  canEditCurrentVersion: boolean
 ): boolean => {
-  if (isLocked) {
+  if (!canEditCurrentVersion) {
     return false;
   }
 
@@ -118,18 +156,143 @@ const canEditDepartmentBlock = (
   return currentDepartmentId === block.departmentId;
 };
 
+const isVersionEditableAt = (version: ReportWorkspaceProject['versions'][number], now: Date): boolean => {
+  if (!version.isLocked) {
+    return true;
+  }
+
+  if (!version.overtimeUnlockUntil) {
+    return false;
+  }
+
+  const unlockUntilMs = Date.parse(version.overtimeUnlockUntil);
+  if (!Number.isFinite(unlockUntilMs)) {
+    return false;
+  }
+
+  return now.getTime() < unlockUntilMs;
+};
+
+const getLatestEditableVersion = (project: ReportWorkspaceProject) => {
+  return project.versions
+    .filter((version) => !version.isLocked)
+    .sort((a, b) => b.versionNo - a.versionNo)[0];
+};
+
+const canEditDepartmentScope = (
+  currentRole: ReportWorkspaceState['currentRole'],
+  currentDepartmentId: string,
+  targetDepartmentId: string
+): boolean => {
+  if (currentRole === 'admin') {
+    return true;
+  }
+  return currentDepartmentId === targetDepartmentId;
+};
+
+const normalizeFieldLimits = (limits?: Partial<ReportFieldLimits>): ReportFieldLimits => {
+  return {
+    ...DEFAULT_REPORT_FIELD_LIMITS,
+    ...limits,
+  };
+};
+
+const getVersionFieldLimitViolations = (
+  version: ReportWorkspaceProject['versions'][number],
+  fieldLimits: ReportFieldLimits
+) => {
+  const violations: Array<{ pageId: string; departmentId: string; field: keyof ReportFields; length: number; limit: number }> = [];
+
+  version.pages.forEach((page) => {
+    if (page.type !== 'report') {
+      return;
+    }
+
+    page.blocks.forEach((block) => {
+      fieldsMeta.forEach((meta) => {
+        const value = block.fields[meta.key];
+        const limit = fieldLimits[meta.key];
+        if (value.length > limit) {
+          violations.push({
+            pageId: page.id,
+            departmentId: block.departmentId,
+            field: meta.key,
+            length: value.length,
+            limit,
+          });
+        }
+      });
+    });
+  });
+
+  return violations;
+};
+
+const buildAttendanceSummary = (expectedRoster: AttendanceExpectedMember[], records: AttendanceRecord[]) => {
+  const activeRecords = records.filter((record) => !record.voidedAt);
+  const canonicalByMemberId = new Map<string, AttendanceRecord>();
+
+  activeRecords.forEach((record) => {
+    const existing = canonicalByMemberId.get(record.memberId);
+    if (!existing) {
+      canonicalByMemberId.set(record.memberId, record);
+      return;
+    }
+
+    const existingTime = Date.parse(existing.signedAt);
+    const nextTime = Date.parse(record.signedAt);
+    if (Number.isFinite(nextTime) && (!Number.isFinite(existingTime) || nextTime >= existingTime)) {
+      canonicalByMemberId.set(record.memberId, record);
+    }
+  });
+
+  const canonicalRecords = Array.from(canonicalByMemberId.values());
+  const activeByMemberId = new Map(canonicalRecords.map((record) => [record.memberId, record]));
+
+  const onTime = canonicalRecords.filter((record) => record.status === 'on_time');
+  const late = canonicalRecords.filter((record) => record.status === 'late');
+  const absent = expectedRoster.filter((member) => !activeByMemberId.has(member.id));
+
+  return {
+    activeRecords: canonicalRecords,
+    onTime,
+    late,
+    absent,
+  };
+};
+
 export const ReportWorkspacePage: React.FC = () => {
   const theme = useTheme();
-  const [state, setState] = useState<ReportWorkspaceState>(initialReportWorkspaceState);
+  const [state, setState] = useState<ReportWorkspaceState>(loadPersistedState);
   const [newDepartmentName, setNewDepartmentName] = useState('');
   const [newPageType, setNewPageType] = useState<WorkspacePageType>('report');
   const [expandedDepartmentId, setExpandedDepartmentId] = useState<string>('');
   const [projectDialogMode, setProjectDialogMode] = useState<'create' | 'rename' | null>(null);
   const [projectNameInput, setProjectNameInput] = useState('');
-  const [workspaceTab, setWorkspaceTab] = useState<'content' | 'chat'>('content');
+  const [workspaceTab, setWorkspaceTab] = useState<'content' | 'chat' | 'admin'>('content');
+  const [adminTab, setAdminTab] = useState<'presentation' | 'lock' | 'attendance' | 'field'>('presentation');
   const [chatInput, setChatInput] = useState('');
   const [previewImage, setPreviewImage] = useState<WorkspaceImageItem | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({ open: false, message: '' });
+  const [nowTick, setNowTick] = useState(Date.now());
+  const [overtimeMinutes, setOvertimeMinutes] = useState('15');
+  const [overtimeReason, setOvertimeReason] = useState('');
+  const [overtimeReasonError, setOvertimeReasonError] = useState('');
+  const [attendanceRosterDraft, setAttendanceRosterDraft] = useState('');
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  }, [state]);
 
   const visibleProjects = useMemo(
     () => state.projects.filter((project) => !project.isArchived),
@@ -151,10 +314,182 @@ export const ReportWorkspacePage: React.FC = () => {
     [activeProject?.activePageId, activeVersion]
   );
 
+  const activeVersionCanEdit = useMemo(
+    () => (activeVersion ? isVersionEditableAt(activeVersion, new Date(nowTick)) : false),
+    [activeVersion, nowTick]
+  );
+
   const sortedDepartments = useMemo(
     () => [...(activeProject?.departments ?? [])].filter((department) => department.active).sort((a, b) => a.order - b.order),
     [activeProject?.departments]
   );
+
+  const activeAttendanceSession = useMemo(() => {
+    if (!activeProject) {
+      return undefined;
+    }
+    return (
+      activeProject.attendance.sessions.find((session) => session.id === activeProject.attendance.activeSessionId) ??
+      activeProject.attendance.sessions[0]
+    );
+  }, [activeProject]);
+
+  const activeFieldLimits = useMemo(
+    () => normalizeFieldLimits(activeProject?.fieldLimits),
+    [activeProject?.fieldLimits]
+  );
+
+  useEffect(() => {
+    if (!activeAttendanceSession) {
+      setAttendanceRosterDraft('');
+      return;
+    }
+
+    const text = activeAttendanceSession.expectedRoster
+      .map((member) => {
+        const departmentName =
+          activeProject?.departments.find((department) => department.id === member.departmentId)?.name ?? member.departmentId;
+        return `${departmentName},${member.name}`;
+      })
+      .join('\n');
+
+    setAttendanceRosterDraft(text);
+  }, [activeAttendanceSession, activeProject?.departments]);
+
+  useEffect(() => {
+    let didAutoLock = false;
+
+    setState((prev) => {
+      const nowMs = nowTick;
+      let changed = false;
+
+      const projects = prev.projects.map((project) => {
+        if (!project.meetingLock.lockAt) {
+          return project;
+        }
+
+        const lockAtMs = Date.parse(project.meetingLock.lockAt);
+        if (!Number.isFinite(lockAtMs) || nowMs < lockAtMs) {
+          return project;
+        }
+
+        const targetVersion = getLatestEditableVersion(project);
+        if (!targetVersion) {
+          changed = true;
+          return {
+            ...project,
+            meetingLock: {
+              ...project.meetingLock,
+              lockAt: '',
+            },
+          };
+        }
+
+        const { lockedVersion, nextVersion, nextActivePageId } = cloneVersionForNext(
+          targetVersion,
+          project.activePageId,
+          { lockedAt: nowIso(), lockType: 'scheduled' }
+        );
+
+        changed = true;
+        didAutoLock = true;
+
+        return {
+          ...project,
+          lockAuditEvents: project.lockAuditEvents.concat({
+            id: `audit-${Date.now()}`,
+            action: 'scheduled_lock',
+            actorRole: 'admin',
+            versionId: lockedVersion.id,
+            at: lockedVersion.lockedAt ?? nowIso(),
+          } satisfies LockAuditEvent),
+          versions: project.versions.map((version) => (version.id === lockedVersion.id ? lockedVersion : version)).concat(nextVersion),
+          activeVersionId: nextVersion.id,
+          activePageId: nextActivePageId,
+          meetingLock: {
+            ...project.meetingLock,
+            lockAt: '',
+          },
+        };
+      });
+
+      if (!changed) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        projects,
+      };
+    });
+
+    if (didAutoLock) {
+      setSnackbar({ open: true, message: '已依排程自動鎖定目前版本，並建立下一版。' });
+    }
+  }, [nowTick]);
+
+  useEffect(() => {
+    let didExpire = false;
+
+    setState((prev) => {
+      const now = new Date(nowTick);
+      const projects = prev.projects.map((project) => {
+        let changed = false;
+        const expiredVersionIds: string[] = [];
+        const nextVersions = project.versions.map((version) => {
+          if (!version.overtimeUnlockUntil) {
+            return version;
+          }
+
+          const expiresAtMs = Date.parse(version.overtimeUnlockUntil);
+          if (!Number.isFinite(expiresAtMs) || now.getTime() < expiresAtMs) {
+            return version;
+          }
+
+          changed = true;
+          didExpire = true;
+          expiredVersionIds.push(version.id);
+          return {
+            ...version,
+            overtimeUnlockUntil: undefined,
+            overtimeReason: undefined,
+          };
+        });
+
+        if (!changed) {
+          return project;
+        }
+
+        return {
+          ...project,
+          versions: nextVersions,
+          lockAuditEvents: project.lockAuditEvents.concat(
+            expiredVersionIds.map((versionId, index) => ({
+              id: `audit-expire-${Date.now()}-${index}`,
+              action: 'overtime_expire',
+              actorRole: 'admin',
+              versionId,
+              at: now.toISOString(),
+            }))
+          ),
+        };
+      });
+
+      const hasProjectChange = projects.some((project, index) => project !== prev.projects[index]);
+      if (!hasProjectChange) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        projects,
+      };
+    });
+
+    if (didExpire) {
+      setSnackbar({ open: true, message: '外掛時間已到，系統已立即回鎖。' });
+    }
+  }, [nowTick]);
 
   const updateActiveProject = (
     updater: (project: ReportWorkspaceProject) => ReportWorkspaceProject
@@ -246,7 +581,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: '專案已封存。' });
   };
 
-  const updateStateVersions = (updater: (pages: WorkspacePage[], isLocked: boolean) => WorkspacePage[]) => {
+  const updateStateVersions = (updater: (pages: WorkspacePage[], isEditable: boolean) => WorkspacePage[]) => {
     updateActiveProject((project) => ({
       ...project,
       versions: project.versions.map((version) => {
@@ -256,7 +591,7 @@ export const ReportWorkspacePage: React.FC = () => {
 
         return {
           ...version,
-          pages: updater(version.pages, version.isLocked),
+          pages: updater(version.pages, isVersionEditableAt(version, new Date())),
         };
       }),
     }));
@@ -346,7 +681,7 @@ export const ReportWorkspacePage: React.FC = () => {
 
     updateActiveProject((project) => {
       const updatedVersions = project.versions.map((version) => {
-        if (version.id !== project.activeVersionId || version.isLocked) {
+        if (version.id !== project.activeVersionId || !isVersionEditableAt(version, new Date())) {
           return version;
         }
 
@@ -375,25 +710,80 @@ export const ReportWorkspacePage: React.FC = () => {
       return;
     }
 
+    let blockedByFieldLimit = false;
+    let lockSucceeded = false;
+
     updateActiveProject((project) => {
       const currentVersion = project.versions.find((version) => version.id === project.activeVersionId);
-      if (!currentVersion || currentVersion.isLocked) {
+      if (!currentVersion || !isVersionEditableAt(currentVersion, new Date())) {
         return project;
       }
 
-      const { lockedVersion, nextVersion, nextActivePageId } = cloneVersionForNext(currentVersion, project.activePageId);
+      const violations = getVersionFieldLimitViolations(currentVersion, normalizeFieldLimits(project.fieldLimits));
+      if (violations.length > 0) {
+        blockedByFieldLimit = true;
+        setSnackbar({ open: true, message: '仍有欄位超過字數上限，請先修正再鎖定。' });
+        return project;
+      }
+
+      const { lockedVersion, nextVersion, nextActivePageId } = cloneVersionForNext(currentVersion, project.activePageId, {
+        lockedAt: nowIso(),
+        lockType: 'manual',
+      });
+
+      const activeSessionId = project.attendance.activeSessionId;
+      const lockedAt = lockedVersion.lockedAt ?? nowIso();
+      lockSucceeded = true;
 
       return {
         ...project,
+        lockAuditEvents: project.lockAuditEvents.concat({
+          id: `audit-manual-${Date.now()}`,
+          action: 'manual_lock',
+          actorRole: state.currentRole,
+          versionId: lockedVersion.id,
+          at: lockedVersion.lockedAt ?? nowIso(),
+        }),
         versions: project.versions.map((version) =>
           version.id === lockedVersion.id ? lockedVersion : version
         ).concat(nextVersion),
         activeVersionId: nextVersion.id,
         activePageId: nextActivePageId,
+        attendance: {
+          ...project.attendance,
+          sessions: project.attendance.sessions.map((session) =>
+            session.id === activeSessionId
+              ? {
+                ...session,
+                rosterFrozenAt: session.rosterFrozenAt ?? lockedAt,
+              }
+              : session
+          ),
+        },
       };
     });
 
-    setSnackbar({ open: true, message: '版本已鎖定，並自動建立新版本供部門編輯。' });
+    if (!blockedByFieldLimit && lockSucceeded) {
+      setSnackbar({ open: true, message: '版本已鎖定，並自動建立新版本供部門編輯。' });
+    }
+  };
+
+  const handleFieldLimitChange = (field: keyof ReportFields, rawValue: string) => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const parsed = Number.parseInt(rawValue, 10);
+    const fallback = activeFieldLimits[field];
+    const nextValue = Number.isFinite(parsed) ? Math.min(1000, Math.max(50, parsed)) : fallback;
+
+    updateActiveProject((project) => ({
+      ...project,
+      fieldLimits: {
+        ...normalizeFieldLimits(project.fieldLimits),
+        [field]: nextValue,
+      },
+    }));
   };
 
   const handleFieldChange = (
@@ -402,8 +792,33 @@ export const ReportWorkspacePage: React.FC = () => {
     field: keyof ReportFields,
     value: string
   ) => {
-    updateStateVersions((pages, isLocked) => {
-      if (isLocked) {
+    if (!activeProject) {
+      return;
+    }
+
+    const fieldLimit = activeFieldLimits[field];
+    const targetPage = activeVersion?.pages.find((page) => page.id === pageId);
+    const targetBlock = targetPage && targetPage.type === 'report'
+      ? targetPage.blocks.find((block) => block.departmentId === departmentId)
+      : undefined;
+    const currentValue = targetBlock?.fields[field];
+    if (currentValue === undefined) {
+      return;
+    }
+
+    const isLegacyOverLimit = currentValue.length > fieldLimit;
+    if (isLegacyOverLimit && value.length >= currentValue.length) {
+      setSnackbar({ open: true, message: '此欄位為歷史超限內容，請先手動刪減。' });
+      return;
+    }
+
+    const nextValue = isLegacyOverLimit ? value : (value.length > fieldLimit ? value.slice(0, fieldLimit) : value);
+    if (!isLegacyOverLimit && nextValue !== value) {
+      setSnackbar({ open: true, message: '內容超過上限，已自動截斷。' });
+    }
+
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
         return pages;
       }
 
@@ -420,7 +835,7 @@ export const ReportWorkspacePage: React.FC = () => {
                 ...block,
                 fields: {
                   ...block.fields,
-                  [field]: value,
+                  [field]: nextValue,
                 },
                 updatedAt: nowIso(),
               }
@@ -432,8 +847,8 @@ export const ReportWorkspacePage: React.FC = () => {
   };
 
   const handleToggleCompleted = (pageId: string, departmentId: string) => {
-    updateStateVersions((pages, isLocked) => {
-      if (isLocked) {
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
         return pages;
       }
 
@@ -463,8 +878,12 @@ export const ReportWorkspacePage: React.FC = () => {
       return;
     }
 
-    updateStateVersions((pages, isLocked) => {
-      if (isLocked) {
+    if (!canEditDepartmentScope(state.currentRole, activeProject?.currentDepartmentId ?? '', departmentId)) {
+      return;
+    }
+
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
         return pages;
       }
 
@@ -503,8 +922,12 @@ export const ReportWorkspacePage: React.FC = () => {
   };
 
   const handleImageNoteChange = (pageId: string, departmentId: string, imageId: string, note: string) => {
-    updateStateVersions((pages, isLocked) => {
-      if (isLocked) {
+    if (!canEditDepartmentScope(state.currentRole, activeProject?.currentDepartmentId ?? '', departmentId)) {
+      return;
+    }
+
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
         return pages;
       }
 
@@ -531,8 +954,12 @@ export const ReportWorkspacePage: React.FC = () => {
   };
 
   const handleDeleteImage = (pageId: string, departmentId: string, imageId: string) => {
-    updateStateVersions((pages, isLocked) => {
-      if (isLocked) {
+    if (!canEditDepartmentScope(state.currentRole, activeProject?.currentDepartmentId ?? '', departmentId)) {
+      return;
+    }
+
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
         return pages;
       }
 
@@ -567,8 +994,12 @@ export const ReportWorkspacePage: React.FC = () => {
     imageId: string,
     direction: 'up' | 'down'
   ) => {
-    updateStateVersions((pages, isLocked) => {
-      if (isLocked) {
+    if (!canEditDepartmentScope(state.currentRole, activeProject?.currentDepartmentId ?? '', departmentId)) {
+      return;
+    }
+
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
         return pages;
       }
 
@@ -638,8 +1069,273 @@ export const ReportWorkspacePage: React.FC = () => {
     }, 500);
   };
 
-  const canAddPage = !!activeVersion && !activeVersion.isLocked;
+  const handleGrantOvertime = () => {
+    if (!activeProject || !activeVersion || !isAdmin) {
+      return;
+    }
+
+    if (!activeVersion.isLocked) {
+      setSnackbar({ open: true, message: '僅可對已鎖定版本開啟外掛時間。' });
+      return;
+    }
+
+    const reason = overtimeReason.trim();
+    if (!reason) {
+      setOvertimeReasonError('請填寫外掛原因');
+      return;
+    }
+
+    const minutes = Number.parseInt(overtimeMinutes, 10);
+    const validMinutes = [5, 10, 15, 30].includes(minutes) ? minutes : 15;
+    const expiresAt = new Date(Date.now() + validMinutes * 60 * 1000).toISOString();
+
+    updateActiveProject((project) => ({
+      ...project,
+      versions: project.versions.map((version) =>
+        version.id === project.activeVersionId
+          ? {
+            ...version,
+            overtimeUnlockUntil: expiresAt,
+            overtimeReason: reason,
+          }
+          : version
+      ),
+      lockAuditEvents: project.lockAuditEvents.concat({
+        id: `audit-overtime-${Date.now()}`,
+        action: 'overtime_grant',
+        actorRole: state.currentRole,
+        versionId: project.activeVersionId,
+        at: nowIso(),
+        reason,
+        expiresAt,
+      }),
+    }));
+
+    setOvertimeReasonError('');
+    setOvertimeReason('');
+    setSnackbar({ open: true, message: `已開啟 ${validMinutes} 分鐘外掛時間。` });
+  };
+
+  const handleAttendanceRosterSave = () => {
+    if (
+      !activeProject
+      || !activeAttendanceSession
+      || !isAdmin
+      || activeVersion?.isLocked
+      || !!activeAttendanceSession.rosterFrozenAt
+      || !!activeProject.attendance.signInClosedAt
+    ) {
+      return;
+    }
+
+    const lines = attendanceRosterDraft
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '');
+
+    const parsedRoster = lines.map((line, index) => {
+      const [departmentNameRaw, memberNameRaw] = line.split(',').map((part) => part.trim());
+      const fallbackDepartmentId = activeProject.currentDepartmentId;
+      const departmentId =
+        activeProject.departments.find((department) => department.name === departmentNameRaw)?.id ?? fallbackDepartmentId;
+      const memberName = memberNameRaw || departmentNameRaw || `成員${index + 1}`;
+
+      return {
+        id: `expected-${activeAttendanceSession.id}-${index + 1}`,
+        departmentId,
+        name: memberName,
+      };
+    });
+
+    updateActiveProject((project) => ({
+      ...project,
+      attendance: {
+        ...project.attendance,
+        sessions: project.attendance.sessions.map((session) =>
+          session.id === project.attendance.activeSessionId
+            ? {
+              ...session,
+              expectedRoster: parsedRoster,
+            }
+            : session
+        ),
+      },
+    }));
+
+    setSnackbar({ open: true, message: '應到名單已更新。' });
+  };
+
+  const handleOpenSignIn = () => {
+    if (!activeProject || !activeAttendanceSession || !isAdmin) {
+      return;
+    }
+
+    if (activeProject.attendance.signInClosedAt) {
+      setSnackbar({ open: true, message: '此場次簽到已關閉，不可重新開啟一般簽到。' });
+      return;
+    }
+
+    if (activeProject.attendance.signInOpenedAt) {
+      setSnackbar({ open: true, message: '簽到已在進行中。' });
+      return;
+    }
+
+    const openedAt = nowIso();
+
+    updateActiveProject((project) => ({
+      ...project,
+      attendance: {
+        ...project.attendance,
+        signInOpenedAt: openedAt,
+        sessions: project.attendance.sessions.map((session) =>
+          session.id === project.attendance.activeSessionId
+            ? {
+              ...session,
+              startedAt: session.startedAt ?? openedAt,
+            }
+            : session
+        ),
+      },
+    }));
+
+    setSnackbar({ open: true, message: '已開啟一般簽到。' });
+  };
+
+  const handleCloseSignIn = () => {
+    if (!activeProject || !activeAttendanceSession || !isAdmin) {
+      return;
+    }
+
+    if (!activeProject.attendance.signInOpenedAt) {
+      setSnackbar({ open: true, message: '尚未開啟簽到。' });
+      return;
+    }
+
+    if (activeProject.attendance.signInClosedAt) {
+      setSnackbar({ open: true, message: '簽到已結束。' });
+      return;
+    }
+
+    const closedAt = nowIso();
+
+    updateActiveProject((project) => ({
+      ...project,
+      attendance: {
+        ...project.attendance,
+        signInClosedAt: closedAt,
+        sessions: project.attendance.sessions.map((session) =>
+          session.id === project.attendance.activeSessionId
+            ? {
+                ...session,
+                closedAt,
+                rosterFrozenAt: session.rosterFrozenAt ?? closedAt,
+              }
+            : session
+        ),
+      },
+    }));
+
+    setSnackbar({ open: true, message: '已關閉簽到，後續僅可補簽或更正。' });
+  };
+
+  const handleExportAttendanceCsv = () => {
+    if (!activeProject || !activeAttendanceSession || !activeProject.attendance.signInClosedAt) {
+      return;
+    }
+
+    const summary = buildAttendanceSummary(activeAttendanceSession.expectedRoster, activeAttendanceSession.records);
+    const escaped = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+
+    const header = [
+      'sessionId',
+      'department',
+      'memberName',
+      'group',
+      'status',
+      'signedAt',
+      'mode',
+      'actorName',
+      'reason',
+      'overdueBackfill',
+    ];
+
+    const rows: string[][] = [];
+
+    summary.onTime.forEach((record) => {
+      const departmentName =
+        activeProject.departments.find((department) => department.id === record.departmentId)?.name ?? record.departmentId;
+      rows.push([
+        activeAttendanceSession.id,
+        departmentName,
+        record.memberName,
+        'on_time',
+        record.status,
+        record.signedAt,
+        record.mode,
+        record.actorName,
+        record.reason ?? '',
+        record.isOverdueBackfill ? 'true' : 'false',
+      ]);
+    });
+
+    summary.late.forEach((record) => {
+      const departmentName =
+        activeProject.departments.find((department) => department.id === record.departmentId)?.name ?? record.departmentId;
+      rows.push([
+        activeAttendanceSession.id,
+        departmentName,
+        record.memberName,
+        'late',
+        record.status,
+        record.signedAt,
+        record.mode,
+        record.actorName,
+        record.reason ?? '',
+        record.isOverdueBackfill ? 'true' : 'false',
+      ]);
+    });
+
+    summary.absent.forEach((member) => {
+      const departmentName =
+        activeProject.departments.find((department) => department.id === member.departmentId)?.name ?? member.departmentId;
+      rows.push([
+        activeAttendanceSession.id,
+        departmentName,
+        member.name,
+        'absent',
+        'absent',
+        '',
+        '',
+        '',
+        '',
+        'false',
+      ]);
+    });
+
+    const csv = [header.join(','), ...rows.map((row) => row.map(escaped).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `attendance-${activeAttendanceSession.id}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+
+    setSnackbar({ open: true, message: '簽到 CSV 已匯出。' });
+  };
+
+  const canAddPage = !!activeVersion && activeVersionCanEdit;
   const isAdmin = state.currentRole === 'admin';
+  const attendanceSummary = activeAttendanceSession
+    ? buildAttendanceSummary(activeAttendanceSession.expectedRoster, activeAttendanceSession.records)
+    : undefined;
+  const isAttendanceRosterFrozen =
+    !isAdmin
+    || !!activeAttendanceSession?.rosterFrozenAt
+    || !!activeProject?.attendance.signInClosedAt
+    || !!activeVersion?.isLocked;
 
   return (
     <Box className="animate-fade-in-up">
@@ -693,12 +1389,16 @@ export const ReportWorkspacePage: React.FC = () => {
         <Select
           size="small"
           value={state.currentRole}
-          onChange={(event) =>
+          onChange={(event) => {
+            const nextRole = event.target.value as ReportWorkspaceState['currentRole'];
             setState((prev) => ({
               ...prev,
-              currentRole: event.target.value as ReportWorkspaceState['currentRole'],
-            }))
-          }
+              currentRole: nextRole,
+            }));
+            if (nextRole !== 'admin' && workspaceTab === 'admin') {
+              setWorkspaceTab('content');
+            }
+          }}
         >
           <MenuItem value="admin">管理員</MenuItem>
           <MenuItem value="department_user">部門使用者</MenuItem>
@@ -713,6 +1413,7 @@ export const ReportWorkspacePage: React.FC = () => {
               currentDepartmentId: event.target.value,
             }))
           }
+          disabled={!isAdmin}
         >
           {sortedDepartments.map((department) => (
             <MenuItem key={department.id} value={department.id}>
@@ -737,7 +1438,7 @@ export const ReportWorkspacePage: React.FC = () => {
         >
           {activeProject?.versions.map((version) => (
             <MenuItem key={version.id} value={version.id}>
-              v{version.versionNo} {version.isLocked ? '(已鎖定)' : '(編輯中)'}
+              v{version.versionNo} {isVersionEditableAt(version, new Date()) ? '(編輯中)' : '(已鎖定)'}
             </MenuItem>
           ))}
         </Select>
@@ -745,9 +1446,9 @@ export const ReportWorkspacePage: React.FC = () => {
         <Button
           variant="contained"
           color="secondary"
-          startIcon={activeVersion?.isLocked ? <LockOpenIcon /> : <LockIcon />}
+          startIcon={activeVersionCanEdit ? <LockIcon /> : <LockOpenIcon />}
           onClick={handleLockAndClone}
-          disabled={!isAdmin || !activeVersion || activeVersion.isLocked}
+          disabled={!isAdmin || !activeVersion || !activeVersionCanEdit}
         >
           鎖定目前版本
         </Button>
@@ -766,6 +1467,7 @@ export const ReportWorkspacePage: React.FC = () => {
         <Tabs value={workspaceTab} onChange={(_, value) => setWorkspaceTab(value)}>
           <Tab value="content" label="報表內容" />
           <Tab value="chat" label="聊天分析" />
+          {isAdmin && <Tab value="admin" label="後台管理" />}
         </Tabs>
       </Paper>
 
@@ -774,12 +1476,17 @@ export const ReportWorkspacePage: React.FC = () => {
           display: 'grid',
           gridTemplateColumns: {
             xs: '1fr',
-            lg: workspaceTab === 'chat' || !isAdmin ? '280px 1fr' : '280px 1fr 320px',
+            lg:
+              workspaceTab === 'admin'
+                ? '1fr'
+                : workspaceTab === 'chat' || !isAdmin
+                  ? '280px 1fr'
+                  : '280px 1fr 320px',
           },
           gap: 2,
         }}
       >
-        <Stack spacing={2}>
+        {workspaceTab !== 'admin' && <Stack spacing={2}>
           {isAdmin && (
             <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
@@ -793,7 +1500,7 @@ export const ReportWorkspacePage: React.FC = () => {
                     label={`部門 ${department.order}`}
                     value={department.name}
                     onChange={(event) => handleDepartmentRename(department.id, event.target.value)}
-                    disabled={!isAdmin || !!activeVersion?.isLocked}
+                    disabled={!isAdmin || !activeVersionCanEdit}
                   />
                 ))}
                 <Box sx={{ display: 'flex', gap: 1 }}>
@@ -802,14 +1509,14 @@ export const ReportWorkspacePage: React.FC = () => {
                     label="新增部門"
                     value={newDepartmentName}
                     onChange={(event) => setNewDepartmentName(event.target.value)}
-                    disabled={!isAdmin || !!activeVersion?.isLocked}
+                    disabled={!isAdmin || !activeVersionCanEdit}
                     fullWidth
                   />
                   <Button
                     variant="outlined"
                     startIcon={<AddIcon />}
                     onClick={handleAddDepartment}
-                    disabled={!isAdmin || !!activeVersion?.isLocked}
+                    disabled={!isAdmin || !activeVersionCanEdit}
                   >
                     {/* 新增 */}
                   </Button>
@@ -857,9 +1564,229 @@ export const ReportWorkspacePage: React.FC = () => {
               </Button>
             </Stack>
           </Paper>
-        </Stack>
+        </Stack>}
 
-        {workspaceTab === 'content' ? (
+        {workspaceTab === 'admin' ? (
+          <Paper
+            data-testid="workspace-admin-surface"
+            data-meeting-surface="true"
+            elevation={0}
+            sx={{
+              p: 2,
+              ...meetingSurfaceSx,
+            }}
+          >
+            <Typography variant="h6" sx={{ ...meetingHeaderSx, mb: 1.5 }}>
+              後台管理
+            </Typography>
+            <Tabs
+              aria-label="後台管理子選單"
+              value={adminTab}
+              onChange={(_, value) => setAdminTab(value)}
+              sx={{ mb: 2 }}
+            >
+              <Tab value="presentation" label="呈現設定" />
+              <Tab value="lock" label="鎖定與外掛" />
+              <Tab value="attendance" label="簽到設定" />
+              <Tab value="field" label="字數治理" />
+            </Tabs>
+
+            {adminTab === 'presentation' && (
+              <Stack spacing={1.5}>
+                <Typography sx={meetingHintTextSx}>會議封面與頁底顯示設定。</Typography>
+                <TextField
+                  size="small"
+                  label="封面會議時間"
+                  value={activeProject?.presentation.cover.meetingDateTime ?? ''}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      presentation: {
+                        ...project.presentation,
+                        cover: {
+                          ...project.presentation.cover,
+                          meetingDateTime: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="封面版本資訊"
+                  value={activeProject?.presentation.cover.versionInfo ?? ''}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      presentation: {
+                        ...project.presentation,
+                        cover: {
+                          ...project.presentation.cover,
+                          versionInfo: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  fullWidth
+                />
+              </Stack>
+            )}
+            {adminTab === 'lock' && (
+              <Stack spacing={1.5}>
+                <Typography sx={meetingHintTextSx}>會議鎖定時間與外掛時間治理設定。</Typography>
+                <TextField
+                  size="small"
+                  type="datetime-local"
+                  label="自動鎖定時間"
+                  value={activeProject?.meetingLock.lockAt ?? ''}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      meetingLock: {
+                        ...project.meetingLock,
+                        lockAt: event.target.value,
+                      },
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="時區"
+                  value={activeProject?.meetingLock.timezone ?? 'Asia/Taipei'}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      meetingLock: {
+                        ...project.meetingLock,
+                        timezone: event.target.value,
+                      },
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  select
+                  label="外掛分鐘數"
+                  value={overtimeMinutes}
+                  onChange={(event) => setOvertimeMinutes(event.target.value)}
+                >
+                  {[5, 10, 15, 30].map((minute) => (
+                    <MenuItem key={minute} value={String(minute)}>
+                      {minute} 分鐘
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  size="small"
+                  label="外掛原因"
+                  value={overtimeReason}
+                  onChange={(event) => {
+                    setOvertimeReason(event.target.value);
+                    if (overtimeReasonError) {
+                      setOvertimeReasonError('');
+                    }
+                  }}
+                  error={overtimeReasonError !== ''}
+                  helperText={overtimeReasonError || '請填寫本次外掛治理原因'}
+                  fullWidth
+                />
+                <Button variant="contained" onClick={handleGrantOvertime}>
+                  開啟外掛時間
+                </Button>
+                <Typography sx={meetingHintTextSx}>
+                  {activeVersion?.overtimeUnlockUntil
+                    ? `外掛進行中，至 ${new Date(activeVersion.overtimeUnlockUntil).toLocaleString()}。`
+                    : '目前未開啟外掛時間。'}
+                </Typography>
+              </Stack>
+            )}
+            {adminTab === 'attendance' && (
+              <Stack spacing={1.5}>
+                <Typography sx={meetingHintTextSx}>簽到名單、開關與補簽治理設定。</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenSignIn}
+                    disabled={!isAdmin || !!activeProject?.attendance.signInClosedAt}
+                  >
+                    開始簽到
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={handleCloseSignIn}
+                    disabled={!isAdmin || !activeProject?.attendance.signInOpenedAt || !!activeProject?.attendance.signInClosedAt}
+                  >
+                    結束簽到
+                  </Button>
+                </Box>
+                <Typography sx={meetingHintTextSx}>
+                  {activeProject?.attendance.signInClosedAt
+                    ? `簽到已結束（${new Date(activeProject.attendance.signInClosedAt).toLocaleString()}）。`
+                    : activeProject?.attendance.signInOpenedAt
+                      ? '簽到進行中（一般簽到開啟）'
+                      : '簽到尚未開始。'}
+                </Typography>
+                {activeProject?.attendance.signInClosedAt && attendanceSummary && (
+                  <Stack spacing={0.5}>
+                    <Typography sx={meetingHintTextSx}>準時 ({attendanceSummary.onTime.length})</Typography>
+                    <Typography sx={meetingHintTextSx}>遲到 ({attendanceSummary.late.length})</Typography>
+                    <Typography sx={meetingHintTextSx}>缺席 ({attendanceSummary.absent.length})</Typography>
+                    {attendanceSummary.absent.slice(0, 5).map((member) => (
+                      <Typography key={member.id} sx={meetingHintTextSx}>
+                        - {member.name}
+                      </Typography>
+                    ))}
+                    <Button variant="outlined" onClick={handleExportAttendanceCsv}>
+                      匯出簽到 CSV
+                    </Button>
+                  </Stack>
+                )}
+                <TextField
+                  size="small"
+                  label="應到名單（每行：部門,姓名）"
+                  value={attendanceRosterDraft}
+                  onChange={(event) => setAttendanceRosterDraft(event.target.value)}
+                  multiline
+                  minRows={4}
+                  fullWidth
+                  disabled={isAttendanceRosterFrozen}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleAttendanceRosterSave}
+                  disabled={isAttendanceRosterFrozen}
+                >
+                  儲存應到名單
+                </Button>
+                <Typography sx={meetingHintTextSx}>
+                  {activeAttendanceSession?.rosterFrozenAt
+                    ? `名單已於 ${new Date(activeAttendanceSession.rosterFrozenAt).toLocaleString()} 鎖定。`
+                    : '名單尚未鎖定，管理員可於鎖定前調整。'}
+                </Typography>
+              </Stack>
+            )}
+            {adminTab === 'field' && (
+              <Stack spacing={1.5}>
+                <Typography sx={meetingHintTextSx}>各欄位字數限制與驗證設定（50～1000）。</Typography>
+                {fieldsMeta.map((meta) => (
+                  <TextField
+                    key={meta.key}
+                    size="small"
+                    type="number"
+                    label={`${fieldLimitLabels[meta.key]}上限`}
+                    value={activeFieldLimits[meta.key]}
+                    onChange={(event) => handleFieldLimitChange(meta.key, event.target.value)}
+                    inputProps={{ min: 50, max: 1000 }}
+                    fullWidth
+                  />
+                ))}
+              </Stack>
+            )}
+          </Paper>
+        ) : workspaceTab === 'content' ? (
           <>
             <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
               {!activeVersion || !activePage ? (
@@ -872,8 +1799,8 @@ export const ReportWorkspacePage: React.FC = () => {
                     </Typography>
                     <Chip
                       size="small"
-                      color={activeVersion.isLocked ? 'warning' : 'success'}
-                      label={activeVersion.isLocked ? '此版本已鎖定（唯讀）' : '此版本可編輯'}
+                      color={activeVersionCanEdit ? 'success' : 'warning'}
+                      label={activeVersionCanEdit ? '此版本可編輯' : '此版本已鎖定（唯讀）'}
                     />
                   </Box>
 
@@ -896,7 +1823,7 @@ export const ReportWorkspacePage: React.FC = () => {
                             state.currentRole,
                             activeProject?.currentDepartmentId ?? '',
                             block,
-                            activeVersion.isLocked
+                            activeVersionCanEdit
                           );
 
                           return (
@@ -944,21 +1871,37 @@ export const ReportWorkspacePage: React.FC = () => {
                                   </Button>
                                 </Box>
                                 <Stack spacing={1}>
-                                  {fieldsMeta.map((meta) => (
-                                    <TextField
-                                      key={meta.key}
-                                      label={meta.label}
-                                      size="small"
-                                      value={block.fields[meta.key]}
-                                      onChange={(event) =>
-                                        handleFieldChange(activePage.id, block.departmentId, meta.key, event.target.value)
-                                      }
-                                      multiline={!!meta.multiline}
-                                      minRows={meta.multiline}
-                                      disabled={!editable}
-                                      fullWidth
-                                    />
-                                  ))}
+                                  {fieldsMeta.map((meta) => {
+                                    const fieldValue = block.fields[meta.key];
+                                    const fieldLimit = activeFieldLimits[meta.key];
+                                    const fieldLength = fieldValue.length;
+                                    const nearLimit = fieldLength >= Math.floor(fieldLimit * 0.8);
+                                    const overLimit = fieldLength > fieldLimit;
+
+                                    return (
+                                      <TextField
+                                        key={meta.key}
+                                        label={meta.label}
+                                        size="small"
+                                        value={fieldValue}
+                                        onChange={(event) =>
+                                          handleFieldChange(activePage.id, block.departmentId, meta.key, event.target.value)
+                                        }
+                                        multiline={!!meta.multiline}
+                                        minRows={meta.multiline}
+                                        disabled={!editable}
+                                        error={overLimit}
+                                        helperText={
+                                          <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                            <span>{`${fieldLength}/${fieldLimit}`}</span>
+                                            {nearLimit && <span>已達 80% 警戒</span>}
+                                            {overLimit && <span>此欄位已超限，需修正後才能鎖定版本</span>}
+                                          </Box>
+                                        }
+                                        fullWidth
+                                      />
+                                    );
+                                  })}
                                 </Stack>
                               </AccordionDetails>
                             </Accordion>
@@ -988,7 +1931,7 @@ export const ReportWorkspacePage: React.FC = () => {
                             <Button
                               component="label"
                               variant="outlined"
-                              disabled={activeVersion.isLocked}
+                              disabled={!activeVersionCanEdit}
                               sx={{ width: 'fit-content' }}
                             >
                               上傳圖片
@@ -1034,7 +1977,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                         onChange={(event) =>
                                           handleImageNoteChange(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, event.target.value)
                                         }
-                                        disabled={activeVersion.isLocked}
+                                        disabled={!activeVersionCanEdit}
                                       />
                                       <Box sx={{ display: 'flex', gap: 1 }}>
                                         <IconButton
@@ -1042,7 +1985,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                           onClick={() =>
                                             handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'up')
                                           }
-                                          disabled={activeVersion.isLocked || index === 0}
+                                          disabled={!activeVersionCanEdit || index === 0}
                                         >
                                           <ArrowUpwardIcon fontSize="small" />
                                         </IconButton>
@@ -1051,7 +1994,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                           onClick={() =>
                                             handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'down')
                                           }
-                                          disabled={activeVersion.isLocked || index === sorted.length - 1}
+                                          disabled={!activeVersionCanEdit || index === sorted.length - 1}
                                         >
                                           <ArrowDownwardIcon fontSize="small" />
                                         </IconButton>
@@ -1061,7 +2004,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                           onClick={() =>
                                             handleDeleteImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id)
                                           }
-                                          disabled={activeVersion.isLocked}
+                                          disabled={!activeVersionCanEdit}
                                         >
                                           刪除
                                         </Button>

@@ -1,0 +1,645 @@
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createWorkspaceProject } from '../../mock/reportWorkspaceData';
+import { ReportWorkspacePage } from './ReportWorkspace';
+
+describe('ReportWorkspacePage backend management tab', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    window.localStorage.removeItem('report-workspace-state');
+  });
+
+  it('shows backend management tab for admin', () => {
+    render(<ReportWorkspacePage />);
+
+    expect(screen.getByRole('tab', { name: '後台管理' })).toBeInTheDocument();
+  });
+
+  it('hides backend management tab for department user', () => {
+    render(<ReportWorkspacePage />);
+
+    const roleSelect = screen.getAllByRole('combobox').find((node) => node.textContent?.includes('管理員'));
+    if (!roleSelect) {
+      throw new Error('role selector not found');
+    }
+    fireEvent.mouseDown(roleSelect);
+    fireEvent.click(screen.getByRole('option', { name: '部門使用者' }));
+
+    expect(screen.queryByRole('tab', { name: '後台管理' })).not.toBeInTheDocument();
+  });
+
+  it('enforces role matrix across pre-meeting, in-meeting, and post-meeting states', () => {
+    const preMeetingProject = createWorkspaceProject('project-role-pre', '角色矩陣-會前');
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'department_user',
+        activeProjectId: preMeetingProject.id,
+        projects: [preMeetingProject],
+      })
+    );
+
+    const preMeetingRender = render(<ReportWorkspacePage />);
+    expect(screen.queryByRole('tab', { name: '後台管理' })).not.toBeInTheDocument();
+
+    const preMeetingField = screen.getAllByLabelText('工作項目')[0] as HTMLInputElement;
+    expect(preMeetingField).toBeEnabled();
+    fireEvent.change(preMeetingField, { target: { value: '會前更新' } });
+    expect(preMeetingField.value).toBe('會前更新');
+    preMeetingRender.unmount();
+
+    const inMeetingProject = createWorkspaceProject('project-role-during', '角色矩陣-會中');
+    inMeetingProject.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'department_user',
+        activeProjectId: inMeetingProject.id,
+        projects: [inMeetingProject],
+      })
+    );
+
+    const inMeetingRender = render(<ReportWorkspacePage />);
+    expect(screen.queryByRole('tab', { name: '後台管理' })).not.toBeInTheDocument();
+    expect((screen.getAllByLabelText('工作項目')[0] as HTMLInputElement)).toBeEnabled();
+    inMeetingRender.unmount();
+
+    const postMeetingProject = createWorkspaceProject('project-role-post', '角色矩陣-會後');
+    postMeetingProject.versions = [{ ...postMeetingProject.versions[0], isLocked: true }];
+    postMeetingProject.activeVersionId = postMeetingProject.versions[0].id;
+    postMeetingProject.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    postMeetingProject.attendance.signInClosedAt = '2026-03-25T14:00:00.000Z';
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'department_user',
+        activeProjectId: postMeetingProject.id,
+        projects: [postMeetingProject],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    expect(screen.queryByRole('tab', { name: '後台管理' })).not.toBeInTheDocument();
+    expect((screen.getAllByLabelText('工作項目')[0] as HTMLInputElement)).toBeDisabled();
+  });
+
+  it('shows management sub-tabs when backend management is selected', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+
+    const subTablist = screen.getByRole('tablist', { name: '後台管理子選單' });
+    expect(within(subTablist).getByRole('tab', { name: '呈現設定' })).toBeInTheDocument();
+    expect(within(subTablist).getByRole('tab', { name: '鎖定與外掛' })).toBeInTheDocument();
+    expect(within(subTablist).getByRole('tab', { name: '簽到設定' })).toBeInTheDocument();
+    expect(within(subTablist).getByRole('tab', { name: '字數治理' })).toBeInTheDocument();
+  });
+
+  it('allows admin to edit cover metadata in presentation settings', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '呈現設定' }));
+
+    const meetingInput = screen.getByLabelText('封面會議時間');
+    const versionInput = screen.getByLabelText('封面版本資訊');
+
+    fireEvent.change(meetingInput, { target: { value: '2026-03-25 14:00' } });
+    fireEvent.change(versionInput, { target: { value: 'v3 (已鎖定)' } });
+
+    expect(meetingInput).toHaveValue('2026-03-25 14:00');
+    expect(versionInput).toHaveValue('v3 (已鎖定)');
+  });
+
+  it('keeps state consistent when switching across backend sub-tabs', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '呈現設定' }));
+
+    const meetingInput = screen.getByLabelText('封面會議時間') as HTMLInputElement;
+    fireEvent.change(meetingInput, { target: { value: '2026-05-01 09:30' } });
+
+    fireEvent.click(screen.getByRole('tab', { name: '鎖定與外掛' }));
+    fireEvent.change(screen.getByLabelText('時區'), { target: { value: 'Asia/Taipei' } });
+
+    fireEvent.click(screen.getByRole('tab', { name: '呈現設定' }));
+    expect((screen.getByLabelText('封面會議時間') as HTMLInputElement).value).toBe('2026-05-01 09:30');
+  });
+
+  it('uses unified meeting surface marker in backend management tab', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+
+    expect(screen.getByTestId('workspace-admin-surface')).toHaveAttribute('data-meeting-surface', 'true');
+  });
+
+  it('allows admin to set one-time lock datetime and timezone in lock tab', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '鎖定與外掛' }));
+
+    const lockAtInput = screen.getByLabelText('自動鎖定時間');
+    const timezoneInput = screen.getByLabelText('時區');
+
+    fireEvent.change(lockAtInput, { target: { value: '2026-04-01T14:00' } });
+    fireEvent.change(timezoneInput, { target: { value: 'Asia/Taipei' } });
+
+    expect(lockAtInput).toHaveValue('2026-04-01T14:00');
+    expect(timezoneInput).toHaveValue('Asia/Taipei');
+  });
+
+  it('auto-locks latest editable version at or after lockAt and clones next editable version', () => {
+    const project = createWorkspaceProject('project-lock', '鎖定測試專案');
+    project.versions = [
+      { ...project.versions[0], id: 'ver-1-locked', versionNo: 1, isLocked: true },
+      { ...project.versions[0], id: 'ver-2-editing', versionNo: 2, isLocked: false },
+    ];
+    project.activeVersionId = 'ver-2-editing';
+    project.meetingLock = {
+      lockAt: '2026-03-01T10:00:00.000Z',
+      timezone: 'Asia/Taipei',
+    };
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    expect(screen.getByText('v3 (編輯中)')).toBeInTheDocument();
+  });
+
+  it('requires overtime reason and defaults duration to 15 minutes', () => {
+    const project = createWorkspaceProject('project-overtime-reason', '外掛原因測試專案');
+    project.versions = [{ ...project.versions[0], id: 'ver-2-locked', versionNo: 2, isLocked: true }];
+    project.activeVersionId = 'ver-2-locked';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '鎖定與外掛' }));
+
+    expect(screen.getByLabelText('外掛分鐘數')).toHaveTextContent('15 分鐘');
+
+    fireEvent.click(screen.getByRole('button', { name: '開啟外掛時間' }));
+
+    expect(screen.getByText('請填寫外掛原因')).toBeInTheDocument();
+  });
+
+  it('relocks immediately when overtime expires', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-01T10:00:00.000Z'));
+
+    const project = createWorkspaceProject('project-overtime', '外掛測試專案');
+    project.versions = [{ ...project.versions[0], id: 'ver-2-locked', versionNo: 2, isLocked: true }];
+    project.activeVersionId = 'ver-2-locked';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '鎖定與外掛' }));
+
+    fireEvent.change(screen.getByLabelText('外掛原因'), { target: { value: '會議追加修正' } });
+    fireEvent.click(screen.getByRole('button', { name: '開啟外掛時間' }));
+
+    expect(screen.getByText(/外掛進行中/)).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(16 * 60 * 1000);
+    });
+
+    expect(screen.getByText('目前未開啟外掛時間。')).toBeInTheDocument();
+  });
+
+  it('allows admin to edit expected roster before lock', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    const rosterInput = screen.getByLabelText('應到名單（每行：部門,姓名）');
+    expect(rosterInput).toBeEnabled();
+
+    fireEvent.change(rosterInput, { target: { value: '業務部,王小明\n研發部,陳小華' } });
+    fireEvent.click(screen.getByRole('button', { name: '儲存應到名單' }));
+
+    expect(screen.getByText('應到名單已更新。')).toBeInTheDocument();
+  });
+
+  it('freezes expected roster after lock action', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '鎖定目前版本' }));
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    expect(screen.getByLabelText('應到名單（每行：部門,姓名）')).toBeDisabled();
+    expect(screen.getByText(/名單已於/)).toBeInTheDocument();
+  });
+
+  it('allows admin to open and close sign-in, then disallows reopening normal sign-in', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '開始簽到' }));
+    expect(screen.getByText('簽到進行中（一般簽到開啟）')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '結束簽到' }));
+    expect(screen.getByText(/簽到已結束/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '開始簽到' })).toBeDisabled();
+  });
+
+  it('keeps normal sign-in open until admin explicitly closes it', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T10:00:00.000Z'));
+
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '開始簽到' }));
+    expect(screen.getByText('簽到進行中（一般簽到開啟）')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(8 * 60 * 60 * 1000);
+    });
+
+    expect(screen.getByText('簽到進行中（一般簽到開啟）')).toBeInTheDocument();
+  });
+
+  it('shows finalized attendance groups after sign-in closes', () => {
+    const project = createWorkspaceProject('project-attendance-summary', '簽到總覽專案');
+    const session = project.attendance.sessions[0];
+    if (!session) {
+      throw new Error('attendance session missing in fixture');
+    }
+
+    session.expectedRoster = [
+      { id: 'member-on-time', departmentId: 'dept-1', name: '王小明' },
+      { id: 'member-late', departmentId: 'dept-2', name: '陳小華' },
+      { id: 'member-absent', departmentId: 'dept-3', name: '林小美' },
+    ];
+    session.records = [
+      {
+        id: 'record-1',
+        sessionId: session.id,
+        memberId: 'member-on-time',
+        departmentId: 'dept-1',
+        memberName: '王小明',
+        signedAt: '2026-03-25T13:55:00.000Z',
+        status: 'on_time',
+        actorRole: 'department_user',
+        actorName: '王小明',
+        mode: 'self',
+      },
+      {
+        id: 'record-2',
+        sessionId: session.id,
+        memberId: 'member-late',
+        departmentId: 'dept-2',
+        memberName: '陳小華',
+        signedAt: '2026-03-25T14:08:00.000Z',
+        status: 'late',
+        actorRole: 'department_user',
+        actorName: '陳小華',
+        mode: 'self',
+      },
+    ];
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.attendance.signInClosedAt = '2026-03-25T14:00:00.000Z';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    expect(screen.getByText('準時 (1)')).toBeInTheDocument();
+    expect(screen.getByText('遲到 (1)')).toBeInTheDocument();
+    expect(screen.getByText('缺席 (1)')).toBeInTheDocument();
+    expect(screen.getByText('- 林小美')).toBeInTheDocument();
+  });
+
+  it('canonicalizes duplicate active records per member when showing finalized attendance groups', () => {
+    const project = createWorkspaceProject('project-attendance-canonicalize', '簽到去重專案');
+    const session = project.attendance.sessions[0];
+    if (!session) {
+      throw new Error('attendance session missing in fixture');
+    }
+
+    session.expectedRoster = [{ id: 'member-1', departmentId: 'dept-1', name: '王小明' }];
+    session.records = [
+      {
+        id: 'record-old',
+        sessionId: session.id,
+        memberId: 'member-1',
+        departmentId: 'dept-1',
+        memberName: '王小明',
+        signedAt: '2026-03-25T13:40:00.000Z',
+        status: 'on_time',
+        actorRole: 'department_user',
+        actorName: '王小明',
+        mode: 'self',
+      },
+      {
+        id: 'record-new',
+        sessionId: session.id,
+        memberId: 'member-1',
+        departmentId: 'dept-1',
+        memberName: '王小明',
+        signedAt: '2026-03-25T14:05:00.000Z',
+        status: 'late',
+        actorRole: 'admin',
+        actorName: '管理員',
+        mode: 'correction',
+      },
+    ];
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.attendance.signInClosedAt = '2026-03-25T14:00:00.000Z';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    expect(screen.getByText('準時 (0)')).toBeInTheDocument();
+    expect(screen.getByText('遲到 (1)')).toBeInTheDocument();
+    expect(screen.getByText('缺席 (0)')).toBeInTheDocument();
+  });
+
+  it('exports canonicalized attendance summary as CSV after sign-in closes', async () => {
+    const createObjectUrlSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:attendance-csv');
+    const revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    let csvBlob: Blob | null = null;
+    createObjectUrlSpy.mockImplementation((blob) => {
+      csvBlob = blob as Blob;
+      return 'blob:attendance-csv';
+    });
+
+    const project = createWorkspaceProject('project-attendance-export', '簽到匯出專案');
+    const session = project.attendance.sessions[0];
+    if (!session) {
+      throw new Error('attendance session missing in fixture');
+    }
+
+    session.expectedRoster = [
+      { id: 'member-on-time', departmentId: 'dept-1', name: '王小明' },
+      { id: 'member-absent', departmentId: 'dept-2', name: '陳小華' },
+    ];
+    session.records = [
+      {
+        id: 'record-1',
+        sessionId: session.id,
+        memberId: 'member-on-time',
+        departmentId: 'dept-1',
+        memberName: '王小明',
+        signedAt: '2026-03-25T13:55:00.000Z',
+        status: 'on_time',
+        actorRole: 'department_user',
+        actorName: '王小明',
+        mode: 'self',
+      },
+      {
+        id: 'record-2',
+        sessionId: session.id,
+        memberId: 'member-on-time',
+        departmentId: 'dept-1',
+        memberName: '王小明',
+        signedAt: '2026-03-25T14:05:00.000Z',
+        status: 'late',
+        actorRole: 'admin',
+        actorName: '管理員',
+        mode: 'correction',
+      },
+    ];
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.attendance.signInClosedAt = '2026-03-25T14:00:00.000Z';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '匯出簽到 CSV' }));
+
+    expect(createObjectUrlSpy).toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectUrlSpy).toHaveBeenCalled();
+    if (!csvBlob) {
+      throw new Error('CSV blob was not created');
+    }
+    const csvBlobData = csvBlob;
+
+    const csvContent = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Failed to read CSV blob'));
+      reader.readAsText(csvBlobData);
+    });
+    expect(csvContent).toContain('group,status');
+    expect(csvContent).toContain('"王小明","late","late"');
+    expect(csvContent).toContain('"陳小華","absent","absent"');
+    expect(csvContent).not.toContain('"王小明","on_time","on_time"');
+
+    createObjectUrlSpy.mockRestore();
+    revokeObjectUrlSpy.mockRestore();
+    clickSpy.mockRestore();
+  });
+
+  it('freezes roster editing once sign-in is closed', () => {
+    const project = createWorkspaceProject('project-attendance-roster-freeze', '簽到封存專案');
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.attendance.signInClosedAt = '2026-03-25T14:00:00.000Z';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    expect(screen.getByLabelText('應到名單（每行：部門,姓名）')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '儲存應到名單' })).toBeDisabled();
+  });
+
+  it('shows default field limits and clamps admin updates between 50 and 1000', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '字數治理' }));
+
+    const workItemLimitInput = screen.getByLabelText('工作項目上限') as HTMLInputElement;
+    expect(workItemLimitInput).toBeInTheDocument();
+
+    fireEvent.change(workItemLimitInput, { target: { value: '10' } });
+    expect(workItemLimitInput.value).toBe('50');
+
+    fireEvent.change(workItemLimitInput, { target: { value: '3000' } });
+    expect(workItemLimitInput.value).toBe('1000');
+  });
+
+  it('shows real-time count and warning style when reaching 80 percent', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '字數治理' }));
+
+    const workItemLimitInput = screen.getByLabelText('工作項目上限');
+    fireEvent.change(workItemLimitInput, { target: { value: '50' } });
+
+    fireEvent.click(screen.getByRole('tab', { name: '報表內容' }));
+    const workItemInput = screen.getAllByLabelText('工作項目')[0];
+    fireEvent.change(workItemInput, { target: { value: 'A'.repeat(40) } });
+
+    expect(screen.getByText('40/50')).toBeInTheDocument();
+    expect(screen.getByText('已達 80% 警戒')).toBeInTheDocument();
+  });
+
+  it('truncates over-limit paste with notice while counting spaces and newlines', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '字數治理' }));
+    fireEvent.change(screen.getByLabelText('工作項目上限'), { target: { value: '50' } });
+
+    fireEvent.click(screen.getByRole('tab', { name: '報表內容' }));
+    const workItemInput = screen.getAllByLabelText('工作項目')[0] as HTMLInputElement;
+    const overLimitText = `A B\n${'C'.repeat(60)}`;
+    fireEvent.change(workItemInput, { target: { value: overLimitText } });
+
+    expect(workItemInput.value.length).toBe(50);
+    expect(screen.getByText('內容超過上限，已自動截斷。')).toBeInTheDocument();
+    expect(screen.getByText('50/50')).toBeInTheDocument();
+  });
+
+  it('blocks lock when any report field remains over configured limits', () => {
+    const project = createWorkspaceProject('project-field-limit-lock', '字數鎖定檢查專案');
+    const version = project.versions[0];
+    if (!version) {
+      throw new Error('version missing in fixture');
+    }
+    const page = version.pages.find((item) => item.type === 'report');
+    if (!page || page.type !== 'report') {
+      throw new Error('report page missing in fixture');
+    }
+    const firstBlock = page.blocks[0];
+    if (!firstBlock) {
+      throw new Error('report block missing in fixture');
+    }
+
+    firstBlock.fields.workItem = 'X'.repeat(1200);
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('button', { name: '鎖定目前版本' }));
+
+    expect(screen.getByText('仍有欄位超過字數上限，請先修正再鎖定。')).toBeInTheDocument();
+    expect(screen.getByText('v1 (編輯中)')).toBeInTheDocument();
+  });
+
+  it('does not silently mutate legacy over-limit content and requires manual reduction', () => {
+    const project = createWorkspaceProject('project-legacy-field', '歷史超限專案');
+    const version = project.versions[0];
+    if (!version) {
+      throw new Error('version missing in fixture');
+    }
+    const page = version.pages.find((item) => item.type === 'report');
+    if (!page || page.type !== 'report') {
+      throw new Error('report page missing in fixture');
+    }
+    const firstBlock = page.blocks[0];
+    if (!firstBlock) {
+      throw new Error('report block missing in fixture');
+    }
+
+    firstBlock.fields.workItem = 'L'.repeat(1200);
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    const workItemInput = screen.getAllByLabelText('工作項目')[0] as HTMLInputElement;
+    expect(workItemInput.value.length).toBe(1200);
+
+    fireEvent.change(workItemInput, { target: { value: `${workItemInput.value}X` } });
+
+    expect(workItemInput.value.length).toBe(1200);
+    expect(screen.getByText('此欄位為歷史超限內容，請先手動刪減。')).toBeInTheDocument();
+  });
+});

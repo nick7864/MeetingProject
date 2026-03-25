@@ -20,10 +20,12 @@ import {
   Description as DescriptionIcon,
   KeyboardArrowRight as KeyboardArrowRightIcon,
   Construction as ConstructionIcon,
+  Slideshow as SlideshowIcon,
 } from '@mui/icons-material';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { theme } from './styles/theme';
 import { ReportWorkspacePage } from './components/ReportWorkspace';
+import { PresentationPage } from './components/PresentationPage';
 
 const drawerWidth = 260;
 
@@ -39,6 +41,7 @@ const App: React.FC = () => {
     // { text: '文件管理', icon: <DescriptionIcon />, path: '/documents' },
     // { text: '文件搜尋', icon: <DescriptionIcon />, path: '/search' },
     { text: '報表工作台', icon: <DescriptionIcon />, path: '/report-workspace' },
+    { text: '會議呈現', icon: <SlideshowIcon />, path: '/presentation' },
   ];
 
   const drawer = (
@@ -269,6 +272,7 @@ const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<ReportWorkspacePage />} />
             <Route path="/report-workspace" element={<ReportWorkspacePage />} />
+            <Route path="/presentation" element={<PresentationPage />} />
           </Routes>
         </Container>
       </Box>
