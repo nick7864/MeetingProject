@@ -19,7 +19,6 @@ import {
 import {
   Description as DescriptionIcon,
   KeyboardArrowRight as KeyboardArrowRightIcon,
-  Construction as ConstructionIcon,
   Slideshow as SlideshowIcon,
 } from '@mui/icons-material';
 import { ThemeProvider, CssBaseline } from '@mui/material';
