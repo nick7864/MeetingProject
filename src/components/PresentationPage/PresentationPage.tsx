@@ -599,12 +599,12 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
             ...(isExpanded
               ? {}
               : {
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: '-webkit-box',
-                  WebkitBoxOrient: 'vertical',
-                  WebkitLineClamp: summaryLines,
-                }),
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: summaryLines,
+              }),
           }}
         >
           {value.trim() || '（未填寫）'}
@@ -809,9 +809,9 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5, fontSize: `${1.4 * fontScale}rem` }}>
           {currentSlide?.department.name ?? '-'}
         </Typography>
-        <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 2 }}>
+        {/* <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 2 }}>
           {currentSlide?.page.name ?? '-'}
-        </Typography>
+        </Typography> */}
         {renderSlideContent()}
       </Paper>
 

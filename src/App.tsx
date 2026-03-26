@@ -226,8 +226,8 @@ const App: React.FC = () => {
       </AppBar>}
 
       {/* Navigation Drawer */}
-      {!hideChrome && <Box component="nav" data-testid="app-sidebar" sx={{ 
-        width: { md: currentDrawerWidth }, 
+      {!hideChrome && <Box component="nav" data-testid="app-sidebar" sx={{
+        width: { md: currentDrawerWidth },
         flexShrink: { md: 0 },
         transition: theme.transitions.create('width', {
           easing: theme.transitions.easing.sharp,

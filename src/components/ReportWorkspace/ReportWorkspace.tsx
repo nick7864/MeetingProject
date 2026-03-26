@@ -1230,10 +1230,10 @@ export const ReportWorkspacePage: React.FC = () => {
         sessions: project.attendance.sessions.map((session) =>
           session.id === project.attendance.activeSessionId
             ? {
-                ...session,
-                closedAt,
-                rosterFrozenAt: session.rosterFrozenAt ?? closedAt,
-              }
+              ...session,
+              closedAt,
+              rosterFrozenAt: session.rosterFrozenAt ?? closedAt,
+            }
             : session
         ),
       },
@@ -1347,9 +1347,9 @@ export const ReportWorkspacePage: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
           報表工作台
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        {/* <Typography variant="body2" color="text.secondary">
           版本化部門報表與圖片頁管理（前端 Demo）
-        </Typography>
+        </Typography> */}
       </Box>
 
       <Paper
@@ -1379,17 +1379,23 @@ export const ReportWorkspacePage: React.FC = () => {
           ))}
         </Select>
 
-        <Button variant="outlined" onClick={openCreateProjectDialog} disabled={!isAdmin}>
-          新增專案
-        </Button>
+        {isAdmin && (
+          <Button variant="outlined" onClick={openCreateProjectDialog} disabled={!isAdmin || !activeProject}>
+            新增專案
+          </Button>
+        )}
 
-        <Button variant="outlined" onClick={openRenameProjectDialog} disabled={!isAdmin || !activeProject}>
-          重新命名
-        </Button>
+        {isAdmin && (
+          <Button variant="outlined" onClick={openRenameProjectDialog} disabled={!isAdmin || !activeProject}>
+            重新命名
+          </Button>
+        )}
 
-        <Button variant="outlined" color="warning" onClick={handleArchiveProject} disabled={!isAdmin || !activeProject}>
-          封存專案
-        </Button>
+        {isAdmin && (
+          <Button variant="outlined" color="warning" onClick={handleArchiveProject} disabled={!isAdmin || !activeProject}>
+            封存專案
+          </Button>
+        )}
         <Select
           size="small"
           value={state.currentRole}
@@ -1447,15 +1453,17 @@ export const ReportWorkspacePage: React.FC = () => {
           ))}
         </Select>
 
-        <Button
-          variant="contained"
-          color="secondary"
-          startIcon={activeVersionCanEdit ? <LockIcon /> : <LockOpenIcon />}
-          onClick={handleLockAndClone}
-          disabled={!isAdmin || !activeVersion || !activeVersionCanEdit}
-        >
-          鎖定目前版本
-        </Button>
+        {isAdmin && (
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={activeVersionCanEdit ? <LockIcon /> : <LockOpenIcon />}
+            onClick={handleLockAndClone}
+            disabled={!isAdmin || !activeVersion || !activeVersionCanEdit}
+          >
+            鎖定目前版本
+          </Button>
+        )}
       </Paper>
 
       <Paper
