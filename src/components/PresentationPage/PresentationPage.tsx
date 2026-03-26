@@ -44,6 +44,7 @@ interface PresentationSlide {
 
 const STORAGE_KEY = 'report-workspace-state';
 
+// 從 localStorage 取出目前作用中的專案，供獨立開啟呈現頁時使用。
 const resolveProjectFromStorage = (): ReportWorkspaceProject => {
   if (typeof window === 'undefined') {
     return initialReportWorkspaceState.projects[0];
@@ -64,20 +65,24 @@ const resolveProjectFromStorage = (): ReportWorkspaceProject => {
   }
 };
 
+// 取得目前專案最新的已鎖定版本，作為會議呈現快照來源。
 const getLatestLockedVersion = (project: ReportWorkspaceProject) => {
   return project.versions
     .filter((version) => version.isLocked)
     .sort((a, b) => b.versionNo - a.versionNo)[0];
 };
 
+// 篩出仍啟用中的部門並依排序回傳。
 const getActiveDepartments = (project: ReportWorkspaceProject): WorkspaceDepartment[] => {
   return [...project.departments].filter((department) => department.active).sort((a, b) => a.order - b.order);
 };
 
+// 依頁面順序整理投影片來源頁。
 const getSortedPages = (pages: WorkspacePage[]): WorkspacePage[] => {
   return [...pages].sort((a, b) => a.order - b.order);
 };
 
+// 將簽到狀態代碼轉成畫面顯示文字。
 const getAttendanceStatusLabel = (status: 'on_time' | 'late' | 'absent') => {
   if (status === 'late') {
     return '遲到';
@@ -88,6 +93,7 @@ const getAttendanceStatusLabel = (status: 'on_time' | 'late' | 'absent') => {
   return '準時';
 };
 
+// 依簽到模式決定前台要顯示的狀態文案，例如補簽與逾期補簽。
 const getDisplayStatusLabel = (
   status: 'on_time' | 'late' | 'absent',
   mode: 'self' | 'proxy' | 'correction' | 'backfill',
@@ -138,6 +144,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
 
   const toolbarHideTimerRef = useRef<number | null>(null);
 
+  // 清除全螢幕工具列自動隱藏計時器。
   const clearToolbarTimer = () => {
     if (toolbarHideTimerRef.current !== null) {
       window.clearTimeout(toolbarHideTimerRef.current);
@@ -145,6 +152,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     }
   };
 
+  // 重新排程全螢幕工具列的自動隱藏時間。
   const scheduleToolbarHide = () => {
     clearToolbarTimer();
     toolbarHideTimerRef.current = window.setTimeout(() => {
@@ -152,11 +160,13 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     }, 1600);
   };
 
+  // 顯示全螢幕工具列，並重新開始隱藏倒數。
   const revealToolbar = () => {
     setIsToolbarVisible(true);
     scheduleToolbarHide();
   };
 
+  // 切換全螢幕模式，並同步調整工具列顯示狀態。
   const handleToggleFullscreen = () => {
     setIsFullscreen((prev) => {
       const next = !prev;
@@ -194,6 +204,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
       return undefined;
     }
 
+    // 監聽左右方向鍵，讓報告模式可快速切換投影片。
     const handleKeyDown = (event: KeyboardEvent) => {
       const currentIndex = slides.findIndex((slide) => slide.id === activeSlideId);
 
@@ -229,6 +240,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
 
   const summaryLines = Math.max(1, resolvedProject.presentation.summaryLines || 4);
 
+  // 判斷報表欄位是否需要顯示展開全文按鈕。
   const shouldShowExpand = (value: string) => {
     if (!value.trim()) {
       return false;
@@ -236,6 +248,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     return value.length > summaryLines * 40;
   };
 
+  // 產生欄位展開狀態的唯一 key，避免不同頁面互相影響。
   const buildFieldExpansionKey = (
     departmentId: string,
     pageId: string,
@@ -254,6 +267,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     latestAttendanceRecord?.departmentId ??
     '--';
 
+  // 依當前簽到狀態初始化對話框，並開啟簽到 / 補簽 / 更正入口。
   const openSignInDialog = () => {
     setSignInMode(isSignInClosed ? 'backfill' : 'self');
     setSignInActorName('');
@@ -263,6 +277,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     setSignInDialogOpen(true);
   };
 
+  // 以名單對應既有 memberId；若找不到則建立臨時識別值供本次場次使用。
   const resolveMemberId = (departmentId: string, memberName: string) => {
     const rosterMatch = activeAttendanceSession?.expectedRoster.find(
       (member) => member.departmentId === departmentId && member.name === memberName
@@ -271,6 +286,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     return rosterMatch?.id ?? `member-ad-hoc-${departmentId}-${memberName}`;
   };
 
+  // 驗證並寫入簽到 ledger，處理一般簽到、代簽、補簽與更正流程。
   const handleConfirmSignIn = () => {
     const name = signInName.trim();
     const actorName = signInActorName.trim();
@@ -622,6 +638,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   const canGoPrev = activeSlideIndex > 0;
   const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
 
+  // 渲染單一報表欄位，包含摘要截斷與展開收合控制。
   const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
     const expansionKey = buildFieldExpansionKey(departmentId, pageId, field);
     const isExpanded = expandedFields[expansionKey] ?? false;
@@ -668,6 +685,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     );
   };
 
+  // 依目前投影片型別渲染一般報表或圖片頁內容。
   const renderSlideContent = () => {
     if (!currentSlide) {
       return null;

@@ -78,9 +78,11 @@ const fieldLimitLabels: Record<keyof ReportFields, string> = {
   executiveDiscussion: '待層峰討論 & 決議',
 };
 
+// 統一產生目前時間的 ISO 字串，供版本與簽到事件留痕使用。
 const nowIso = () => new Date().toISOString();
 const STORAGE_KEY = 'report-workspace-state';
 
+// 從 localStorage 還原工作台狀態；讀取失敗時回退到初始 mock 資料。
 const loadPersistedState = (): ReportWorkspaceState => {
   if (typeof window === 'undefined') {
     return initialReportWorkspaceState;
@@ -103,6 +105,7 @@ const loadPersistedState = (): ReportWorkspaceState => {
   }
 };
 
+// 依目前選取的版本與頁面內容，回傳簡單的助理回覆模擬結果。
 const getAssistantReply = (project: ReportWorkspaceProject, userInput: string): string => {
   const activeVersion = project.versions.find((version) => version.id === project.activeVersionId);
   const activePage = activeVersion?.pages.find((page) => page.id === project.activePageId);
@@ -139,6 +142,7 @@ const getAssistantReply = (project: ReportWorkspaceProject, userInput: string): 
   return `已分析圖片頁（${departmentName}）：共有 ${imageCount} 張圖片。可優先補齊關鍵圖片註解，方便跨部門同步。`;
 };
 
+// 判斷當前角色是否能編輯指定部門的一般報表區塊。
 const canEditDepartmentBlock = (
   currentRole: ReportWorkspaceState['currentRole'],
   currentDepartmentId: string,
@@ -156,6 +160,7 @@ const canEditDepartmentBlock = (
   return currentDepartmentId === block.departmentId;
 };
 
+// 判斷版本在當下是否可編輯，包含未鎖定與外掛時間中的情況。
 const isVersionEditableAt = (version: ReportWorkspaceProject['versions'][number], now: Date): boolean => {
   if (!version.isLocked) {
     return true;
@@ -173,12 +178,14 @@ const isVersionEditableAt = (version: ReportWorkspaceProject['versions'][number]
   return now.getTime() < unlockUntilMs;
 };
 
+// 取得專案中最新、尚可編輯的版本，供自動鎖定排程使用。
 const getLatestEditableVersion = (project: ReportWorkspaceProject) => {
   return project.versions
     .filter((version) => !version.isLocked)
     .sort((a, b) => b.versionNo - a.versionNo)[0];
 };
 
+// 判斷目前使用者是否有權操作指定部門範圍的資料。
 const canEditDepartmentScope = (
   currentRole: ReportWorkspaceState['currentRole'],
   currentDepartmentId: string,
@@ -190,6 +197,7 @@ const canEditDepartmentScope = (
   return currentDepartmentId === targetDepartmentId;
 };
 
+// 將欄位上限設定補齊預設值，避免缺欄導致驗證不一致。
 const normalizeFieldLimits = (limits?: Partial<ReportFieldLimits>): ReportFieldLimits => {
   return {
     ...DEFAULT_REPORT_FIELD_LIMITS,
@@ -197,6 +205,7 @@ const normalizeFieldLimits = (limits?: Partial<ReportFieldLimits>): ReportFieldL
   };
 };
 
+// 掃描版本內所有一般報表欄位，找出超過字數限制的內容。
 const getVersionFieldLimitViolations = (
   version: ReportWorkspaceProject['versions'][number],
   fieldLimits: ReportFieldLimits
@@ -228,6 +237,7 @@ const getVersionFieldLimitViolations = (
   return violations;
 };
 
+// 將簽到 ledger 正規化後整理成準時、遲到與缺席三組摘要資料。
 const buildAttendanceSummary = (expectedRoster: AttendanceExpectedMember[], records: AttendanceRecord[]) => {
   const activeRecords = records.filter((record) => !record.voidedAt);
   const canonicalByMemberId = new Map<string, AttendanceRecord>();
@@ -491,6 +501,7 @@ export const ReportWorkspacePage: React.FC = () => {
     }
   }, [nowTick]);
 
+  // 只更新目前作用中的專案，避免每個 handler 都重寫整段 setState 邏輯。
   const updateActiveProject = (
     updater: (project: ReportWorkspaceProject) => ReportWorkspaceProject
   ) => {
@@ -506,11 +517,13 @@ export const ReportWorkspacePage: React.FC = () => {
     }));
   };
 
+  // 開啟建立專案對話框並重設輸入欄位。
   const openCreateProjectDialog = () => {
     setProjectDialogMode('create');
     setProjectNameInput('');
   };
 
+  // 開啟重新命名專案對話框，並帶入目前專案名稱。
   const openRenameProjectDialog = () => {
     if (!activeProject) {
       return;
@@ -520,11 +533,13 @@ export const ReportWorkspacePage: React.FC = () => {
     setProjectNameInput(activeProject.projectName);
   };
 
+  // 關閉專案對話框並清掉暫存輸入。
   const closeProjectDialog = () => {
     setProjectDialogMode(null);
     setProjectNameInput('');
   };
 
+  // 依對話框模式建立新專案或更新現有專案名稱。
   const handleSaveProjectDialog = () => {
     const name = projectNameInput.trim();
     if (!name) {
@@ -557,6 +572,7 @@ export const ReportWorkspacePage: React.FC = () => {
     closeProjectDialog();
   };
 
+  // 封存目前專案，並切換到其他仍可用的專案。
   const handleArchiveProject = () => {
     if (!activeProject) {
       return;
@@ -581,6 +597,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: '專案已封存。' });
   };
 
+  // 僅針對目前作用中的版本更新頁面資料，並帶入版本是否可編輯的判斷結果。
   const updateStateVersions = (updater: (pages: WorkspacePage[], isEditable: boolean) => WorkspacePage[]) => {
     updateActiveProject((project) => ({
       ...project,
@@ -597,6 +614,7 @@ export const ReportWorkspacePage: React.FC = () => {
     }));
   };
 
+  // 新增部門，並同步補上各版本對應的報表區塊與圖片群組。
   const handleAddDepartment = () => {
     const name = newDepartmentName.trim();
     if (!name || !activeProject) {
@@ -665,6 +683,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setNewDepartmentName('');
   };
 
+  // 更新部門名稱，供報表與簽到顯示共用。
   const handleDepartmentRename = (departmentId: string, name: string) => {
     updateActiveProject((project) => ({
       ...project,
@@ -674,6 +693,7 @@ export const ReportWorkspacePage: React.FC = () => {
     }));
   };
 
+  // 在目前可編輯版本新增一頁，並切到新建立的頁面。
   const handleAddPage = () => {
     if (!activeProject) {
       return;
@@ -705,6 +725,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 手動鎖定目前版本、建立下一版，並同步凍結當前簽到場次名單。
   const handleLockAndClone = () => {
     if (!activeProject) {
       return;
@@ -768,6 +789,7 @@ export const ReportWorkspacePage: React.FC = () => {
     }
   };
 
+  // 更新欄位字數上限設定，並將輸入限制在允許範圍內。
   const handleFieldLimitChange = (field: keyof ReportFields, rawValue: string) => {
     if (!isAdmin) {
       return;
@@ -786,6 +808,7 @@ export const ReportWorkspacePage: React.FC = () => {
     }));
   };
 
+  // 更新一般報表欄位內容，同時套用字數限制與歷史超限保護。
   const handleFieldChange = (
     pageId: string,
     departmentId: string,
@@ -846,6 +869,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 切換指定部門報表區塊的完成狀態。
   const handleToggleCompleted = (pageId: string, departmentId: string) => {
     updateStateVersions((pages, isEditable) => {
       if (!isEditable) {
@@ -873,6 +897,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 上傳指定部門的圖片頁內容，並限制每頁每部門僅保留一張圖片。
   const handleUploadImages = (pageId: string, departmentId: string, files: FileList | null) => {
     if (!files || files.length === 0) {
       return;
@@ -925,6 +950,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 更新圖片註解內容。
   const handleImageNoteChange = (pageId: string, departmentId: string, imageId: string, note: string) => {
     if (!canEditDepartmentScope(state.currentRole, activeProject?.currentDepartmentId ?? '', departmentId)) {
       return;
@@ -957,6 +983,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 刪除圖片並重新整理同群組的排序編號。
   const handleDeleteImage = (pageId: string, departmentId: string, imageId: string) => {
     if (!canEditDepartmentScope(state.currentRole, activeProject?.currentDepartmentId ?? '', departmentId)) {
       return;
@@ -992,6 +1019,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 調整同群組內圖片的上下排序。
   const handleReorderImage = (
     pageId: string,
     departmentId: string,
@@ -1029,6 +1057,7 @@ export const ReportWorkspacePage: React.FC = () => {
     });
   };
 
+  // 送出工作台聊天訊息，並以延遲回覆模擬助理分析流程。
   const handleSendChat = () => {
     const message = chatInput.trim();
     if (!message || !activeProject) {
@@ -1073,6 +1102,7 @@ export const ReportWorkspacePage: React.FC = () => {
     }, 500);
   };
 
+  // 對已鎖定版本開啟限時外掛編輯時間，並記錄審計事件。
   const handleGrantOvertime = () => {
     if (!activeProject || !activeVersion || !isAdmin) {
       return;
@@ -1120,6 +1150,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: `已開啟 ${validMinutes} 分鐘外掛時間。` });
   };
 
+  // 儲存當前場次的應到名單，供簽到去重與缺席判定使用。
   const handleAttendanceRosterSave = () => {
     if (
       !activeProject
@@ -1169,6 +1200,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: '應到名單已更新。' });
   };
 
+  // 開啟一般簽到，並為目前場次補上開始時間。
   const handleOpenSignIn = () => {
     if (!activeProject || !activeAttendanceSession || !isAdmin) {
       return;
@@ -1205,6 +1237,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: '已開啟一般簽到。' });
   };
 
+  // 關閉一般簽到，並將當前場次標記為已結束且凍結名單。
   const handleCloseSignIn = () => {
     if (!activeProject || !activeAttendanceSession || !isAdmin) {
       return;
@@ -1242,6 +1275,7 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: '已關閉簽到，後續僅可補簽或更正。' });
   };
 
+  // 將結束後的簽到摘要匯出成 CSV，方便後續留存與檢查。
   const handleExportAttendanceCsv = () => {
     if (!activeProject || !activeAttendanceSession || !activeProject.attendance.signInClosedAt) {
       return;
