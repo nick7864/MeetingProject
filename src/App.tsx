@@ -25,6 +25,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import { theme } from './styles/theme';
 import { ReportWorkspacePage } from './components/ReportWorkspace';
 import { PresentationPage } from './components/PresentationPage';
+import logoImg from './assets/images/logo.png';
 
 const drawerWidth = 260;
 
@@ -37,10 +38,6 @@ const App: React.FC = () => {
   const hideChrome = location.pathname === '/presentation' && isPresentationFullscreen;
 
   const menuItems = [
-    // { text: '專案總覽', icon: <DashboardIcon />, path: '/' },
-    // { text: '紅燈警示', icon: <WarningIcon />, path: '/red-lights', badge: mockRedLights.length },
-    // { text: '文件管理', icon: <DescriptionIcon />, path: '/documents' },
-    // { text: '文件搜尋', icon: <DescriptionIcon />, path: '/search' },
     { text: '報表工作台', icon: <DescriptionIcon />, path: '/report-workspace' },
     { text: '會議呈現', icon: <SlideshowIcon />, path: '/presentation' },
   ];
@@ -56,7 +53,7 @@ const App: React.FC = () => {
           gap: 1.5,
         }}
       >
-        <img src="./src/assets/images/logo.png" alt="Logo" width={43} height={40} />
+        <img src={logoImg} alt="Logo" width={43} height={40} />
         <Box>
           <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
             專案例會系統
