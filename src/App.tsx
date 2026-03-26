@@ -57,21 +57,7 @@ const App: React.FC = () => {
           gap: 1.5,
         }}
       >
-        <Box
-          sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
-            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
-          }}
-        >
-          <ConstructionIcon fontSize="small" />
-        </Box>
+        <img src="./src/assets/images/logo.png" alt="Logo" width={43} height={40} />
         <Box>
           <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
             專案例會系統
