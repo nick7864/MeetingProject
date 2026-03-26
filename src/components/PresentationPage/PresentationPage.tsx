@@ -27,6 +27,7 @@ import {
   meetingSlideSectionSx,
   meetingSurfaceSx,
 } from '../../styles/meetingSurface';
+import coverBgImg from '../../assets/images/cover.jpg';
 
 interface PresentationPageProps {
   project?: ReportWorkspaceProject;
@@ -412,62 +413,101 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
         data-testid="presentation-cover-surface"
         data-meeting-surface="true"
         elevation={0}
-        sx={{ p: 3, ...meetingSurfaceSx }}
+        sx={{ p: { xs: 0, md: 4 }, overflow: 'hidden', ...meetingSurfaceSx }}
       >
-        <Typography variant="h5" sx={{ ...meetingHeaderSx, mb: 1 }}>
-          會議呈現頁面
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 0.75 }}>
-          專案：{resolvedProject.projectName}
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 0.75 }}>
-          會議時間：{resolvedProject.presentation.cover.meetingDateTime || '--'}
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 2 }}>
-          版本資訊：{resolvedProject.presentation.cover.versionInfo || '--'}
-        </Typography>
+        <Box
+          sx={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '1080px',
+            mx: 'auto',
+            borderRadius: { xs: 0, md: 2 },
+            boxShadow: { xs: 'none', md: '0 12px 32px rgba(0,0,0,0.15)' },
+            overflow: 'hidden',
+            aspectRatio: '16/9',
+            backgroundImage: `url(${coverBgImg})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            color: 'white',
+          }}
+        >
+          <Typography
+            variant="h1"
+            sx={{
+              fontWeight: 800,
+              color: 'white',
+              textShadow: '0 2px 8px rgba(0,0,0,0.6)',
+              px: { xs: 3, md: 8 },
+              textAlign: 'center',
+              zIndex: 1,
+              letterSpacing: '0.05em',
+            }}
+          >
+            {resolvedProject.presentation.cover.versionInfo || '--'}
+          </Typography>
 
-        {!isCoverReady && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            請先完成封面設定
-          </Alert>
-        )}
-
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button variant="contained" onClick={() => setMode('report')} disabled={!isCoverReady}>
-            開始報告
-          </Button>
-          <Button variant="outlined" onClick={openSignInDialog}>
-            {isSignInClosed ? '補簽/更正' : '我要簽到'}
-          </Button>
-        </Box>
-        {activeAttendanceSession && (
-          <>
-            <Typography sx={{ ...meetingHintTextSx, mt: 1 }}>
-              已簽到 {activeAttendanceSession.records.length} 人
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: { xs: 24, md: 48 },
+              right: { xs: 24, md: 64 },
+              textAlign: 'right',
+              zIndex: 1,
+            }}
+          >
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'white', textShadow: '0 2px 6px rgba(0,0,0,0.6)' }}>
+              {resolvedProject.presentation.cover.meetingDateTime || '--'}
             </Typography>
-            {latestAttendanceRecord && (
-              <>
-                <Typography sx={{ ...meetingHintTextSx, mt: 0.5 }}>
-                  最近簽到：{latestAttendanceRecord.memberName}
-                </Typography>
-                <Typography sx={{ ...meetingHintTextSx, mt: 0.25 }}>
-                  部門：{latestAttendanceDepartmentName}｜時間：{new Date(latestAttendanceRecord.signedAt).toLocaleString()}｜狀態：
-                  {getDisplayStatusLabel(
-                    latestAttendanceRecord.status,
-                    latestAttendanceRecord.mode,
-                    latestAttendanceRecord.isOverdueBackfill
-                  )}
-                  ｜操作者：{latestAttendanceRecord.actorName}
-                  {latestAttendanceRecord.mode === 'proxy' ? '（代簽）' : ''}
-                </Typography>
-                <Typography sx={{ ...meetingHintTextSx, mt: 0.25 }}>
-                  總紀錄 {activeAttendanceSession.records.length} 筆（含作廢 {voidedAttendanceCount} 筆）
-                </Typography>
-              </>
-            )}
-          </>
-        )}
+          </Box>
+        </Box>
+
+        <Box sx={{ p: { xs: 3, md: 4 } }}>
+          {!isCoverReady && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              請先完成封面設定
+            </Alert>
+          )}
+
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button variant="contained" onClick={() => setMode('report')} disabled={!isCoverReady}>
+              開始報告
+            </Button>
+            <Button variant="outlined" onClick={openSignInDialog}>
+              {isSignInClosed ? '補簽/更正' : '我要簽到'}
+            </Button>
+          </Box>
+          {activeAttendanceSession && (
+            <>
+              <Typography sx={{ ...meetingHintTextSx, mt: 1 }}>
+                已簽到 {activeAttendanceSession.records.length} 人
+              </Typography>
+              {latestAttendanceRecord && (
+                <>
+                  <Typography sx={{ ...meetingHintTextSx, mt: 0.5 }}>
+                    最近簽到：{latestAttendanceRecord.memberName}
+                  </Typography>
+                  <Typography sx={{ ...meetingHintTextSx, mt: 0.25 }}>
+                    部門：{latestAttendanceDepartmentName}｜時間：{new Date(latestAttendanceRecord.signedAt).toLocaleString()}｜狀態：
+                    {getDisplayStatusLabel(
+                      latestAttendanceRecord.status,
+                      latestAttendanceRecord.mode,
+                      latestAttendanceRecord.isOverdueBackfill
+                    )}
+                    ｜操作者：{latestAttendanceRecord.actorName}
+                    {latestAttendanceRecord.mode === 'proxy' ? '（代簽）' : ''}
+                  </Typography>
+                  <Typography sx={{ ...meetingHintTextSx, mt: 0.25 }}>
+                    總紀錄 {activeAttendanceSession.records.length} 筆（含作廢 {voidedAttendanceCount} 筆）
+                  </Typography>
+                </>
+              )}
+            </>
+          )}
+        </Box>
 
         <Dialog open={signInDialogOpen} onClose={() => setSignInDialogOpen(false)} maxWidth="xs" fullWidth>
           <DialogTitle>{isSignInClosed ? '補簽/更正' : '手動簽到'}</DialogTitle>
