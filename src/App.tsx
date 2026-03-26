@@ -9,17 +9,21 @@ import {
   List,
   ListItem,
   ListItemButton,
+  ListItemIcon,
   ListItemText,
   Divider,
   Container,
   useTheme,
   alpha,
   Avatar,
+  IconButton,
 } from '@mui/material';
 import {
   Description as DescriptionIcon,
   KeyboardArrowRight as KeyboardArrowRightIcon,
   Slideshow as SlideshowIcon,
+  Menu as MenuIcon,
+  ChevronLeft as ChevronLeftIcon,
 } from '@mui/icons-material';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { theme } from './styles/theme';
@@ -28,11 +32,14 @@ import { PresentationPage } from './components/PresentationPage';
 import logoImg from './assets/images/logo.png';
 
 const drawerWidth = 260;
+const collapsedDrawerWidth = 72;
 
 // 主應用程式
 const App: React.FC = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [isPresentationFullscreen, setIsPresentationFullscreen] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const currentDrawerWidth = isCollapsed ? collapsedDrawerWidth : drawerWidth;
   const theme = useTheme();
   const location = useLocation();
   const hideChrome = location.pathname === '/presentation' && isPresentationFullscreen;
@@ -43,25 +50,36 @@ const App: React.FC = () => {
   ];
 
   const drawer = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
       {/* Logo Area */}
       <Box
         sx={{
           p: 2.5,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'space-between',
           gap: 1.5,
+          minHeight: 80,
         }}
       >
-        <img src={logoImg} alt="Logo" width={43} height={40} />
-        <Box>
-          <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
-            專案例會系統
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Project Control Center
-          </Typography>
+        <Box sx={{ display: { xs: 'flex', md: isCollapsed ? 'none' : 'flex' }, alignItems: 'center', gap: 1.5 }}>
+          <img src={logoImg} alt="Logo" width={43} height={40} />
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.2 }}>
+              專案例會系統
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Project Control Center
+            </Typography>
+          </Box>
         </Box>
+        <IconButton
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          sx={{ display: { xs: 'none', md: 'flex' } }}
+          size="small"
+        >
+          {isCollapsed ? <MenuIcon /> : <ChevronLeftIcon />}
+        </IconButton>
       </Box>
 
       <Divider sx={{ mx: 2 }} />
@@ -71,7 +89,7 @@ const App: React.FC = () => {
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ px: 3, py: 1, display: 'block', fontWeight: 600, letterSpacing: '0.05em' }}
+          sx={{ px: 3, py: 1, display: isCollapsed ? 'none' : 'block', fontWeight: 600, letterSpacing: '0.05em' }}
         >
           功能選單
         </Typography>
@@ -87,7 +105,8 @@ const App: React.FC = () => {
                   sx={{
                     borderRadius: 2,
                     py: 1.25,
-                    px: 2,
+                    px: isCollapsed ? 1 : 2,
+                    justifyContent: isCollapsed ? 'center' : 'flex-start',
                     '&.Mui-selected': {
                       bgcolor: alpha(theme.palette.primary.main, 0.08),
                       '&:hover': {
@@ -103,31 +122,26 @@ const App: React.FC = () => {
                     },
                   }}
                 >
-                  {/* <ListItemIcon sx={{ minWidth: 40 }}>
-                    {item.badge ? (
-                      <Badge
-                        badgeContent={item.badge}
-                        color="error"
-                        sx={{
-                          '& .MuiBadge-badge': {
-                            fontSize: '0.65rem',
-                            height: 18,
-                            minWidth: 18,
-                            fontWeight: 700,
-                          },
-                        }}
-                      >
-                        {item.icon}
-                      </Badge>
-                    ) : (
-                      item.icon
-                    )}
-                  </ListItemIcon> */}
+                  <ListItemIcon
+                    sx={{
+                      minWidth: isCollapsed ? 0 : 40,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
                   <ListItemText
                     primary={item.text}
                     primaryTypographyProps={{ fontWeight: isActive ? 600 : 500 }}
+                    sx={{ display: { xs: 'block', md: isCollapsed ? 'none' : 'block' } }}
                   />
-                  {isActive && <KeyboardArrowRightIcon fontSize="small" color="primary" />}
+                  {isActive && (
+                    <KeyboardArrowRightIcon
+                      fontSize="small"
+                      color="primary"
+                      sx={{ display: { xs: 'block', md: isCollapsed ? 'none' : 'block' } }}
+                    />
+                  )}
                 </ListItemButton>
               </ListItem>
             );
@@ -136,7 +150,7 @@ const App: React.FC = () => {
       </Box>
 
       {/* User Area */}
-      <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ p: isCollapsed ? 1 : 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Avatar
             sx={{
@@ -149,7 +163,7 @@ const App: React.FC = () => {
           >
             A
           </Avatar>
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ flex: 1, display: { xs: 'block', md: isCollapsed ? 'none' : 'block' } }}>
             <Typography variant="body2" fontWeight={600}>
               系統管理員
             </Typography>
@@ -170,14 +184,27 @@ const App: React.FC = () => {
         elevation={0}
         data-testid="app-header"
         sx={{
-          width: { md: `calc(100% - ${drawerWidth}px)` },
-          ml: { md: `${drawerWidth}px` },
+          width: { md: `calc(100% - ${currentDrawerWidth}px)` },
+          ml: { md: `${currentDrawerWidth}px` },
           bgcolor: 'background.paper',
           borderBottom: '1px solid',
           borderColor: 'divider',
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
         }}
       >
-        <Toolbar sx={{ justifyContent: 'flex-end', gap: 1 }}>
+        <Toolbar sx={{ justifyContent: 'space-between', gap: 1 }}>
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={() => setMobileOpen(true)}
+            sx={{ mr: 2, display: { md: 'none' }, color: 'text.primary' }}
+          >
+            <MenuIcon />
+          </IconButton>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Avatar
               sx={{
@@ -199,7 +226,14 @@ const App: React.FC = () => {
       </AppBar>}
 
       {/* Navigation Drawer */}
-      {!hideChrome && <Box component="nav" data-testid="app-sidebar" sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}>
+      {!hideChrome && <Box component="nav" data-testid="app-sidebar" sx={{ 
+        width: { md: currentDrawerWidth }, 
+        flexShrink: { md: 0 },
+        transition: theme.transitions.create('width', {
+          easing: theme.transitions.easing.sharp,
+          duration: theme.transitions.duration.enteringScreen,
+        }),
+      }}>
         {/* Mobile drawer */}
         <Drawer
           variant="temporary"
@@ -226,9 +260,14 @@ const App: React.FC = () => {
             display: { xs: 'none', md: 'block' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
-              width: drawerWidth,
+              width: currentDrawerWidth,
               borderRight: '1px solid',
               borderColor: 'divider',
+              overflowX: 'hidden',
+              transition: theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
             },
           }}
           open
