@@ -60,6 +60,21 @@ import {
 import { meetingHeaderSx, meetingHintTextSx, meetingSurfaceSx } from '../../styles/meetingSurface';
 import { DEFAULT_REPORT_FIELD_LIMITS } from '../../constants/reportFieldLimits';
 
+type AttendanceRosterImportMode = 'replace' | 'append';
+
+interface ParsedAttendanceRosterMember {
+  departmentId: string;
+  departmentName: string;
+  name: string;
+}
+
+interface AttendanceRosterPreviewState {
+  mode: AttendanceRosterImportMode;
+  parsedMembers: ParsedAttendanceRosterMember[];
+  errors: string[];
+  summary: string;
+}
+
 const fieldsMeta: Array<{ key: keyof ReportFields; label: string; multiline?: number }> = [
   { key: 'workItem', label: '工作項目' },
   { key: 'plannedBuildDate', label: '預計完成日(掛建日)' },
@@ -271,6 +286,87 @@ const buildAttendanceSummary = (expectedRoster: AttendanceExpectedMember[], reco
   };
 };
 
+const buildAttendanceRosterDraft = (
+  roster: AttendanceExpectedMember[],
+  departments: WorkspaceDepartment[]
+) => roster
+  .map((member) => {
+    const departmentName = departments.find((department) => department.id === member.departmentId)?.name ?? member.departmentId;
+    return `${departmentName},${member.name}`;
+  })
+  .join('\n');
+
+const parseAttendanceRosterDraft = (
+  draft: string,
+  departments: WorkspaceDepartment[],
+  mode: AttendanceRosterImportMode,
+  existingRoster: AttendanceExpectedMember[]
+): AttendanceRosterPreviewState => {
+  const departmentByName = new Map(departments.map((department) => [department.name, department]));
+  const lines = draft
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  const errors: string[] = [];
+  const parsedMembers: ParsedAttendanceRosterMember[] = [];
+  const seenKeys = new Set<string>();
+  const existingKeys = new Set(existingRoster.map((member) => `${member.departmentId}::${member.name}`));
+
+  if (lines.length === 0) {
+    errors.push('請至少輸入一筆名單');
+  }
+
+  lines.forEach((line, index) => {
+    const lineNumber = index + 1;
+    const [departmentNameRaw = '', memberNameRaw = '', ...extra] = line.split(',').map((part) => part.trim());
+
+    if (departmentNameRaw === '' || extra.length > 0) {
+      errors.push(`第 ${lineNumber} 行：格式需為「部門,姓名」`);
+      return;
+    }
+
+    const department = departmentByName.get(departmentNameRaw);
+    if (!department) {
+      errors.push(`第 ${lineNumber} 行：找不到部門「${departmentNameRaw}」`);
+      return;
+    }
+
+    if (memberNameRaw === '') {
+      errors.push(`第 ${lineNumber} 行：姓名不可空白`);
+      return;
+    }
+
+    const duplicateKey = `${department.id}::${memberNameRaw}`;
+    if (seenKeys.has(duplicateKey)) {
+      errors.push(`第 ${lineNumber} 行：名單重複（${department.name} / ${memberNameRaw}）`);
+      return;
+    }
+
+    if (mode === 'append' && existingKeys.has(duplicateKey)) {
+      errors.push(`第 ${lineNumber} 行：名單已存在（${department.name} / ${memberNameRaw}）`);
+      return;
+    }
+
+    seenKeys.add(duplicateKey);
+    parsedMembers.push({
+      departmentId: department.id,
+      departmentName: department.name,
+      name: memberNameRaw,
+    });
+  });
+
+  const summary = mode === 'append'
+    ? `預覽 ${parsedMembers.length} 筆，將追加 ${parsedMembers.length} 筆到現有 ${existingRoster.length} 筆名單。`
+    : `預覽 ${parsedMembers.length} 筆，將覆蓋現有 ${existingRoster.length} 筆名單。`;
+
+  return {
+    mode,
+    parsedMembers,
+    errors,
+    summary,
+  };
+};
+
 export const ReportWorkspacePage: React.FC = () => {
   const theme = useTheme();
   const [state, setState] = useState<ReportWorkspaceState>(loadPersistedState);
@@ -289,6 +385,8 @@ export const ReportWorkspacePage: React.FC = () => {
   const [overtimeReason, setOvertimeReason] = useState('');
   const [overtimeReasonError, setOvertimeReasonError] = useState('');
   const [attendanceRosterDraft, setAttendanceRosterDraft] = useState('');
+  const [attendanceRosterImportMode, setAttendanceRosterImportMode] = useState<AttendanceRosterImportMode>('replace');
+  const [attendanceRosterPreview, setAttendanceRosterPreview] = useState<AttendanceRosterPreviewState | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -355,15 +453,8 @@ export const ReportWorkspacePage: React.FC = () => {
       return;
     }
 
-    const text = activeAttendanceSession.expectedRoster
-      .map((member) => {
-        const departmentName =
-          activeProject?.departments.find((department) => department.id === member.departmentId)?.name ?? member.departmentId;
-        return `${departmentName},${member.name}`;
-      })
-      .join('\n');
-
-    setAttendanceRosterDraft(text);
+    setAttendanceRosterDraft(buildAttendanceRosterDraft(activeAttendanceSession.expectedRoster, activeProject?.departments ?? []));
+    setAttendanceRosterPreview(null);
   }, [activeAttendanceSession, activeProject?.departments]);
 
   useEffect(() => {
@@ -1150,12 +1241,13 @@ export const ReportWorkspacePage: React.FC = () => {
     setSnackbar({ open: true, message: `已開啟 ${validMinutes} 分鐘外掛時間。` });
   };
 
-  // 儲存當前場次的應到名單，供簽到去重與缺席判定使用。
-  const handleAttendanceRosterSave = () => {
+  // 先解析並預覽名單匯入結果，確認無誤後才允許正式寫入。
+  const handleAttendanceRosterPreview = () => {
     if (
       !activeProject
       || !activeAttendanceSession
       || !isAdmin
+      || !!activeProject.attendance.signInOpenedAt
       || activeVersion?.isLocked
       || !!activeAttendanceSession.rosterFrozenAt
       || !!activeProject.attendance.signInClosedAt
@@ -1163,41 +1255,65 @@ export const ReportWorkspacePage: React.FC = () => {
       return;
     }
 
-    const lines = attendanceRosterDraft
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line !== '');
+    const preview = parseAttendanceRosterDraft(
+      attendanceRosterDraft,
+      activeProject.departments,
+      attendanceRosterImportMode,
+      activeAttendanceSession.expectedRoster
+    );
 
-    const parsedRoster = lines.map((line, index) => {
-      const [departmentNameRaw, memberNameRaw] = line.split(',').map((part) => part.trim());
-      const fallbackDepartmentId = activeProject.currentDepartmentId;
-      const departmentId =
-        activeProject.departments.find((department) => department.name === departmentNameRaw)?.id ?? fallbackDepartmentId;
-      const memberName = memberNameRaw || departmentNameRaw || `成員${index + 1}`;
+    setAttendanceRosterPreview(preview);
+  };
 
-      return {
-        id: `expected-${activeAttendanceSession.id}-${index + 1}`,
-        departmentId,
-        name: memberName,
-      };
-    });
+  // 將已預覽且通過驗證的名單正式寫入當前場次。
+  const handleAttendanceRosterSave = () => {
+    if (
+      !activeProject
+      || !activeAttendanceSession
+      || !attendanceRosterPreview
+      || attendanceRosterPreview.errors.length > 0
+      || attendanceRosterPreview.parsedMembers.length === 0
+      || !isAdmin
+      || !!activeProject.attendance.signInOpenedAt
+      || activeVersion?.isLocked
+      || !!activeAttendanceSession.rosterFrozenAt
+      || !!activeProject.attendance.signInClosedAt
+    ) {
+      return;
+    }
+
+    const baseRoster = attendanceRosterPreview.mode === 'append' ? activeAttendanceSession.expectedRoster : [];
+    const nextRoster = baseRoster.concat(
+      attendanceRosterPreview.parsedMembers.map((member, index) => ({
+        id: `expected-${activeAttendanceSession.id}-${baseRoster.length + index + 1}`,
+        departmentId: member.departmentId,
+        name: member.name,
+      }))
+    );
 
     updateActiveProject((project) => ({
       ...project,
       attendance: {
         ...project.attendance,
-        sessions: project.attendance.sessions.map((session) =>
-          session.id === project.attendance.activeSessionId
-            ? {
-              ...session,
-              expectedRoster: parsedRoster,
-            }
-            : session
-        ),
+          sessions: project.attendance.sessions.map((session) =>
+            session.id === project.attendance.activeSessionId
+              ? {
+                  ...session,
+                  expectedRoster: nextRoster,
+                }
+              : session
+          ),
       },
     }));
 
-    setSnackbar({ open: true, message: '應到名單已更新。' });
+    setAttendanceRosterPreview(null);
+    setAttendanceRosterDraft(buildAttendanceRosterDraft(nextRoster, activeProject.departments));
+    setSnackbar({
+      open: true,
+      message: attendanceRosterPreview.mode === 'append'
+        ? `應到名單已更新（追加 ${attendanceRosterPreview.parsedMembers.length} 筆，總計 ${nextRoster.length} 筆）。`
+        : `應到名單已更新（覆蓋 ${nextRoster.length} 筆）。`,
+    });
   };
 
   // 開啟一般簽到，並為目前場次補上開始時間。
@@ -1371,6 +1487,7 @@ export const ReportWorkspacePage: React.FC = () => {
     : undefined;
   const isAttendanceRosterFrozen =
     !isAdmin
+    || !!activeProject?.attendance.signInOpenedAt
     || !!activeAttendanceSession?.rosterFrozenAt
     || !!activeProject?.attendance.signInClosedAt
     || !!activeVersion?.isLocked;
@@ -1792,21 +1909,63 @@ export const ReportWorkspacePage: React.FC = () => {
                 )}
                 <TextField
                   size="small"
-                  label="應到名單（每行：部門,姓名）"
+                  select
+                  label="匯入方式"
+                  value={attendanceRosterImportMode}
+                  onChange={(event) => {
+                    setAttendanceRosterImportMode(event.target.value as AttendanceRosterImportMode);
+                    setAttendanceRosterPreview(null);
+                  }}
+                  fullWidth
+                  disabled={isAttendanceRosterFrozen}
+                >
+                  <MenuItem value="replace">覆蓋現有名單</MenuItem>
+                  <MenuItem value="append">追加至現有名單</MenuItem>
+                </TextField>
+                <TextField
+                  size="small"
+                  label="名單貼上區"
                   value={attendanceRosterDraft}
-                  onChange={(event) => setAttendanceRosterDraft(event.target.value)}
+                  onChange={(event) => {
+                    setAttendanceRosterDraft(event.target.value);
+                    setAttendanceRosterPreview(null);
+                  }}
                   multiline
                   minRows={4}
+                  helperText="每行格式：部門,姓名。請先預覽，確認後再匯入。"
                   fullWidth
                   disabled={isAttendanceRosterFrozen}
                 />
-                <Button
-                  variant="outlined"
-                  onClick={handleAttendanceRosterSave}
-                  disabled={isAttendanceRosterFrozen}
-                >
-                  儲存應到名單
+                <Button variant="outlined" onClick={handleAttendanceRosterPreview} disabled={isAttendanceRosterFrozen}>
+                  預覽匯入
                 </Button>
+                {attendanceRosterPreview && !isAttendanceRosterFrozen && (
+                  <Stack spacing={1} sx={{ p: 1.5, borderRadius: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography sx={meetingHintTextSx}>{attendanceRosterPreview.summary}</Typography>
+                    {attendanceRosterPreview.errors.length > 0 ? (
+                      <Alert severity="error">
+                        <Stack spacing={0.5}>
+                          {attendanceRosterPreview.errors.map((error) => (
+                            <Typography key={error} variant="body2">
+                              {error}
+                            </Typography>
+                          ))}
+                        </Stack>
+                      </Alert>
+                    ) : (
+                      <Stack spacing={0.5}>
+                        {attendanceRosterPreview.parsedMembers.map((member) => (
+                          <Typography key={`${member.departmentId}-${member.name}`} variant="body2">
+                            {member.departmentName} / {member.name}
+                          </Typography>
+                        ))}
+                        <Button variant="contained" onClick={handleAttendanceRosterSave}>
+                          確認匯入
+                        </Button>
+                      </Stack>
+                    )}
+                  </Stack>
+                )}
                 <Typography sx={meetingHintTextSx}>
                   {activeAttendanceSession?.rosterFrozenAt
                     ? `名單已於 ${new Date(activeAttendanceSession.rosterFrozenAt).toLocaleString()} 鎖定。`

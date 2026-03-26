@@ -240,19 +240,108 @@ describe('ReportWorkspacePage backend management tab', () => {
     expect(screen.getByText('目前未開啟外掛時間。')).toBeInTheDocument();
   });
 
-  it('allows admin to edit expected roster before lock', () => {
+  it('previews and replaces expected roster before import is confirmed', () => {
     render(<ReportWorkspacePage />);
 
     fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
     fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
 
-    const rosterInput = screen.getByLabelText('應到名單（每行：部門,姓名）');
+    const rosterInput = screen.getByLabelText('名單貼上區');
     expect(rosterInput).toBeEnabled();
 
     fireEvent.change(rosterInput, { target: { value: '業務部,王小明\n研發部,陳小華' } });
-    fireEvent.click(screen.getByRole('button', { name: '儲存應到名單' }));
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
 
-    expect(screen.getByText('應到名單已更新。')).toBeInTheDocument();
+    expect(screen.getByText('預覽 2 筆，將覆蓋現有 4 筆名單。')).toBeInTheDocument();
+    expect(screen.getByText('業務部 / 王小明')).toBeInTheDocument();
+    expect(screen.getByText('研發部 / 陳小華')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '確認匯入' }));
+
+    expect(screen.getByText('應到名單已更新（覆蓋 2 筆）。')).toBeInTheDocument();
+  });
+
+  it('blocks preview when roster rows contain unknown department or empty member name', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.change(screen.getByLabelText('名單貼上區'), {
+      target: { value: '不存在部門,王小明\n研發部,' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
+
+    expect(screen.getByText('第 1 行：找不到部門「不存在部門」')).toBeInTheDocument();
+    expect(screen.getByText('第 2 行：姓名不可空白')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '確認匯入' })).not.toBeInTheDocument();
+  });
+
+  it('blocks preview when roster rows contain duplicate department-name pairs', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.change(screen.getByLabelText('名單貼上區'), {
+      target: { value: '業務部,王小明\n業務部,王小明' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
+
+    expect(screen.getByText('第 2 行：名單重複（業務部 / 王小明）')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '確認匯入' })).not.toBeInTheDocument();
+  });
+
+  it('appends roster entries after preview when append mode is selected', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.mouseDown(screen.getByLabelText('匯入方式'));
+    fireEvent.click(screen.getByRole('option', { name: '追加至現有名單' }));
+
+    fireEvent.change(screen.getByLabelText('名單貼上區'), {
+      target: { value: '業務部,王小明\n研發部,陳小華' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
+
+    expect(screen.getByText('預覽 2 筆，將追加 2 筆到現有 4 筆名單。')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '確認匯入' }));
+
+    expect(screen.getByText('應到名單已更新（追加 2 筆，總計 6 筆）。')).toBeInTheDocument();
+  });
+
+  it('blocks append preview when imported rows already exist in current roster', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.mouseDown(screen.getByLabelText('匯入方式'));
+    fireEvent.click(screen.getByRole('option', { name: '追加至現有名單' }));
+
+    fireEvent.change(screen.getByLabelText('名單貼上區'), {
+      target: { value: '業務部,業務部代表' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
+
+    expect(screen.getByText('第 1 行：名單已存在（業務部 / 業務部代表）')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '確認匯入' })).not.toBeInTheDocument();
+  });
+
+  it('blocks empty replace preview with an explicit validation error', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.change(screen.getByLabelText('名單貼上區'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
+
+    expect(screen.getByText('請至少輸入一筆名單')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '確認匯入' })).not.toBeInTheDocument();
   });
 
   it('freezes expected roster after lock action', () => {
@@ -262,7 +351,7 @@ describe('ReportWorkspacePage backend management tab', () => {
     fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
     fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
 
-    expect(screen.getByLabelText('應到名單（每行：部門,姓名）')).toBeDisabled();
+    expect(screen.getByLabelText('名單貼上區')).toBeDisabled();
     expect(screen.getByText(/名單已於/)).toBeInTheDocument();
   });
 
@@ -297,6 +386,45 @@ describe('ReportWorkspacePage backend management tab', () => {
     });
 
     expect(screen.getByText('簽到進行中（一般簽到開啟）')).toBeInTheDocument();
+  });
+
+  it('locks roster import once sign-in has started', () => {
+    const project = createWorkspaceProject('project-attendance-open-roster-lock', '簽到開啟名單鎖定專案');
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    expect(screen.getByLabelText('名單貼上區')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '預覽匯入' })).toBeDisabled();
+  });
+
+  it('clears prior roster preview once sign-in starts', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
+    fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
+
+    fireEvent.change(screen.getByLabelText('名單貼上區'), {
+      target: { value: '業務部,王小明\n研發部,陳小華' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '預覽匯入' }));
+    expect(screen.getByRole('button', { name: '確認匯入' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '開始簽到' }));
+
+    expect(screen.queryByRole('button', { name: '確認匯入' })).not.toBeInTheDocument();
   });
 
   it('shows finalized attendance groups after sign-in closes', () => {
@@ -520,8 +648,8 @@ describe('ReportWorkspacePage backend management tab', () => {
     fireEvent.click(screen.getByRole('tab', { name: '後台管理' }));
     fireEvent.click(screen.getByRole('tab', { name: '簽到設定' }));
 
-    expect(screen.getByLabelText('應到名單（每行：部門,姓名）')).toBeDisabled();
-    expect(screen.getByRole('button', { name: '儲存應到名單' })).toBeDisabled();
+    expect(screen.getByLabelText('名單貼上區')).toBeDisabled();
+    expect(screen.getByRole('button', { name: '預覽匯入' })).toBeDisabled();
   });
 
   it('shows default field limits and clamps admin updates between 50 and 1000', () => {
