@@ -37,3 +37,4 @@ yarn-error.log*
 *.tsbuildinfo
 .spectra/
 openspec/.vector-search.db*
+.worktrees/
