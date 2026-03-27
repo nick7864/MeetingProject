@@ -140,8 +140,15 @@ export interface PresentationCoverSettings {
   versionInfo: string;
 }
 
+export interface PresentationEndSlideSettings {
+  title: string;
+  subtitle: string;
+  supportingText: string;
+}
+
 export interface PresentationSettings {
   cover: PresentationCoverSettings;
+  endSlide: PresentationEndSlideSettings;
   summaryLines: number;
 }
 

@@ -67,12 +67,22 @@ tests:
 ---
 ### Requirement: Admin-only expected roster management before lock
 
-The system SHALL allow only administrators to edit expected participant roster before meeting lock time.
+The system SHALL allow only administrators to edit expected participant roster before meeting lock time and SHALL require roster changes to be previewed before they are applied.
 
 #### Scenario: Non-admin tries to edit expected roster
 
 - **WHEN** a non-admin user attempts to add, remove, or update expected participants
 - **THEN** the system rejects the change
+
+#### Scenario: Admin previews roster import before applying changes
+
+- **WHEN** an administrator pastes roster rows and requests preview
+- **THEN** the system shows the parsed department-member pairs and the import impact before saving
+
+#### Scenario: Admin chooses how roster import applies
+
+- **WHEN** an administrator previews roster import
+- **THEN** the system allows choosing either replacing the current roster or appending new rows to the current roster
 
 
 <!-- @trace
@@ -181,6 +191,31 @@ tests:
   - src/App.test.tsx
   - src/test/smoke.test.ts
 -->
+
+---
+### Requirement: Validated roster import input
+
+The system SHALL validate roster import rows before applying them and SHALL block any import preview or confirmation that contains invalid rows.
+
+#### Scenario: Unknown department in roster input
+
+- **WHEN** a roster row references a department name that does not exist
+- **THEN** the system shows an explicit validation error and does not allow import confirmation
+
+#### Scenario: Empty member name in roster input
+
+- **WHEN** a roster row omits the member name
+- **THEN** the system shows an explicit validation error and does not allow import confirmation
+
+#### Scenario: Duplicate department-member pair in import batch
+
+- **WHEN** the same department-member pair appears more than once in a single import batch
+- **THEN** the system shows a duplicate warning and does not allow import confirmation
+
+#### Scenario: Duplicate department-member pair when appending
+
+- **WHEN** append mode is selected and the imported department-member pair already exists in the current expected roster
+- **THEN** the system shows a duplicate warning and does not allow import confirmation
 
 ---
 ### Requirement: Electronic sign-in before meeting

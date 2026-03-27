@@ -116,6 +116,11 @@ export const createWorkspaceProject = (id: string, projectName: string): ReportW
       meetingDateTime: '',
       versionInfo: '',
     },
+    endSlide: {
+      title: '',
+      subtitle: '',
+      supportingText: '',
+    },
     summaryLines: 4,
   },
   fieldLimits: { ...DEFAULT_REPORT_FIELD_LIMITS },

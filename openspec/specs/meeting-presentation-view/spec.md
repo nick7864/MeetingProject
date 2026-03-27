@@ -64,6 +64,25 @@ tests:
   - src/test/smoke.test.ts
 -->
 
+
+<!-- @trace
+source: add-presentation-end-slide
+updated: 2026-03-27
+code:
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - .docs/attendance-logic-notes.md
+  - nul
+  - src/styles/meetingSurface.ts
+  - src/assets/images/cover-sample.jpg
+  - src/mock/reportWorkspaceData.ts
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/types/reportWorkspace.ts
+  - src/assets/images/End.jpg
+tests:
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/components/PresentationPage/PresentationPage.test.tsx
+-->
+
 ---
 ### Requirement: Admin-only backend management tab visibility
 
@@ -777,60 +796,30 @@ tests:
 ---
 ### Requirement: Text content uses configurable summary lines with expansion
 
-The system SHALL truncate long report text to a globally configured summary line count in presentation mode and SHALL provide an expand action to show full text.
+The system SHALL truncate long report text to a globally configured summary line count in presentation mode and SHALL provide an expand action to show full text, while keeping a consistent field-heading hierarchy before and after expansion.
 
 #### Scenario: Render long text with default summary
 
 - **WHEN** summary line configuration is set to 4 and a field exceeds 4 lines
-- **THEN** the view shows a 4-line summary with an explicit expand control for full content
+- **THEN** the view shows a 4-line summary with an explicit expand control for full content and keeps the same field-heading hierarchy in both summary and expanded states
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
-updated: 2026-03-25
+source: strengthen-presentation-field-heading-hierarchy
+updated: 2026-03-27
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
+  - nul
   - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
+  - src/assets/images/cover-sample.jpg
+  - .docs/attendance-logic-notes.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/assets/images/End.jpg
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/types/reportWorkspace.ts
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
 -->
 
 ---
@@ -1219,4 +1208,101 @@ tests:
   - src/test/setup.ts
   - src/App.test.tsx
   - src/test/smoke.test.ts
+-->
+
+---
+### Requirement: Meeting presentation navigation reaches a managed ending state
+
+The system SHALL let presentation navigation reach a managed ending state after the final content slide and SHALL keep toolbar and keyboard behavior consistent with that ending state.
+
+#### Scenario: Use next button on the final content slide
+
+- **WHEN** a presenter clicks the next button while viewing the final content slide
+- **THEN** the presentation enters the managed ending state instead of remaining stuck on the final content slide
+
+#### Scenario: Use right arrow key on the final content slide
+
+- **WHEN** a presenter presses the right arrow key while viewing the final content slide
+- **THEN** the presentation enters the managed ending state instead of remaining stuck on the final content slide
+
+### MODIFIED Requirements
+
+<!-- @trace
+source: add-presentation-end-slide
+updated: 2026-03-27
+code:
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - .docs/attendance-logic-notes.md
+  - nul
+  - src/styles/meetingSurface.ts
+  - src/assets/images/cover-sample.jpg
+  - src/mock/reportWorkspaceData.ts
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/types/reportWorkspace.ts
+  - src/assets/images/End.jpg
+tests:
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/components/PresentationPage/PresentationPage.test.tsx
+-->
+
+---
+### Requirement: Report fields use stronger but balanced heading hierarchy in presentation mode
+
+The presentation view SHALL render report field headings with stronger hierarchy than body content, and SHALL keep the visual treatment balanced enough that field content remains the primary reading focus.
+
+#### Scenario: Render report field heading in presentation mode
+
+- **WHEN** the presentation view renders a report field heading
+- **THEN** the heading is visually stronger than body text and remains easy to scan in projection reading conditions
+
+#### Scenario: Preserve content-first balance in presentation mode
+
+- **WHEN** the presentation view renders a report field with heading and content together
+- **THEN** the heading improves structural readability without overpowering the body content or disrupting the page harmony
+
+
+<!-- @trace
+source: strengthen-presentation-field-heading-hierarchy
+updated: 2026-03-27
+code:
+  - nul
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/cover-sample.jpg
+  - .docs/attendance-logic-notes.md
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/assets/images/End.jpg
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/types/reportWorkspace.ts
+tests:
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/components/PresentationPage/PresentationPage.test.tsx
+-->
+
+---
+### Requirement: Report field headings use a restrained left-accent visual language
+
+The presentation view SHALL use a restrained left-accent heading treatment for report fields instead of high-emphasis blocks, and SHALL apply that language consistently across the report page.
+
+#### Scenario: Render multiple report fields on the same page
+
+- **WHEN** the presentation view shows several report fields on a report page
+- **THEN** each field heading uses the same restrained left-accent language and the page keeps a coherent visual rhythm
+
+<!-- @trace
+source: strengthen-presentation-field-heading-hierarchy
+updated: 2026-03-27
+code:
+  - nul
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/cover-sample.jpg
+  - .docs/attendance-logic-notes.md
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/assets/images/End.jpg
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/styles/meetingSurface.ts
+  - src/types/reportWorkspace.ts
+tests:
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/components/PresentationPage/PresentationPage.test.tsx
 -->

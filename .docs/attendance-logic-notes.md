@@ -38,9 +38,19 @@
   - 以 memberId 為主鍵保留有效主紀錄
   - 產出 `onTime`、`late`、`absent` 三組結果
 
+- `parseAttendanceRosterDraft`
+  - 解析名單貼上區內容
+  - 驗證格式、部門存在、姓名不可空白
+  - 檢查批次內重複，以及 append 模式是否與既有名單重複
+
+- `handleAttendanceRosterPreview`
+  - 先產生匯入預覽結果
+  - 顯示 replace / append 對現有名單的影響
+  - 有錯誤時阻止確認匯入
+
 - `handleAttendanceRosterSave`
-  - 解析後台輸入的應到名單文字
-  - 寫回目前 active session 的 `expectedRoster`
+  - 只接受已完成預覽且無錯誤的結果
+  - 依 replace / append 模式寫回目前 active session 的 `expectedRoster`
   - 只有 admin 且名單尚未凍結、簽到尚未關閉時可執行
 
 - `handleOpenSignIn`
@@ -95,13 +105,15 @@
 
 ## Current Flow Summary
 
-1. 後台先設定應到名單
-2. 管理員按下開始簽到
-3. 前台封面開放一般簽到 / 代簽
-4. 前台寫入 `records`
-5. 管理員按下結束簽到
-6. 前台切換成只允許補簽 / 更正
-7. 後台查看摘要並匯出 CSV
+1. 後台貼上應到名單
+2. 系統先做預覽與驗證
+3. 管理員確認 replace 或 append 後正式匯入
+4. 管理員按下開始簽到
+5. 前台封面開放一般簽到 / 代簽
+6. 前台寫入 `records`
+7. 管理員按下結束簽到
+8. 前台切換成只允許補簽 / 更正
+9. 後台查看摘要並匯出 CSV
 
 ## Discussion Hotspots
 
@@ -111,7 +123,7 @@
 - `handleLockAndClone` 會順便凍結 roster，代表版本治理與簽到治理是耦合的
 - `handleConfirmSignIn` 用「現在建立紀錄的時間」判斷準時 / 遲到，補簽與更正沒有獨立的實際到場時間欄位
 - `resolveMemberId` 找不到名單時會建立 ad-hoc id，彈性高，但也會影響去重與後續稽核一致性
-- `handleAttendanceRosterSave` 解析名單時，部門名找不到會 fallback 到當前部門，容易讓輸入錯誤被默默吞掉
+- roster 匯入已改成 preview-first；如果之後還要再優化，可以再升級成表格編輯 + 批次匯入混合模式
 - 封面上的「已簽到 N 人」目前直接看 `records.length`，不等於 canonical active attendees
 
 ## Suggested Next Discussion Order

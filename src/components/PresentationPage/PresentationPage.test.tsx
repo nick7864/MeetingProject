@@ -84,13 +84,13 @@ describe('PresentationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
 
     expect(screen.getByText('業務部')).toBeInTheDocument();
-    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+    expect(screen.getByText('工作項目')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '下一張' }));
-    expect(screen.getByText('純圖片顯示-page2')).toBeInTheDocument();
+    expect(screen.getByText('尚未上傳圖片。')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '上一張' }));
-    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+    expect(screen.getByText('工作項目')).toBeInTheDocument();
   });
 
   it('navigates slides with left and right arrow keys', () => {
@@ -102,13 +102,13 @@ describe('PresentationPage', () => {
     render(<PresentationPage project={project} />);
     fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
 
-    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+    expect(screen.getByText('工作項目')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'ArrowRight' });
-    expect(screen.getByText('純圖片顯示-page2')).toBeInTheDocument();
+    expect(screen.getByText('尚未上傳圖片。')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
-    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+    expect(screen.getByText('工作項目')).toBeInTheDocument();
   });
 
   it('auto-hides toolbar in fullscreen and reveals it from top boundary', () => {
@@ -190,6 +190,110 @@ describe('PresentationPage', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: '收合全文' })[0]);
     expect(screen.getAllByRole('button', { name: '展開全文' })[0]).toBeInTheDocument();
+  });
+
+  it('uses the same restrained heading treatment across all report fields', () => {
+    const project = createWorkspaceProject('project-heading-style', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 23 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
+    project.presentation.cover.versionInfo = 'v23 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    const fieldLabels = [
+      '工作項目',
+      '本周、下周辦理情形暨工作預警狀況說明',
+      '預計完成日(掛建日)',
+      '預計完成日(核准日)',
+      '建請協助方案（公關機制/跨部門協調）',
+      '待層峰討論 & 決議',
+    ];
+
+    fieldLabels.forEach((label) => {
+      expect(screen.getByText(label)).toHaveAttribute('data-presentation-field-heading', 'true');
+    });
+  });
+
+  it('keeps heading hierarchy consistent before and after expanding long report text', () => {
+    const project = createWorkspaceProject('project-heading-expand', '專案測試');
+    const reportPage = project.versions[0].pages.find((page) => page.type === 'report');
+    if (!reportPage || reportPage.type !== 'report') {
+      throw new Error('report page not found in fixture');
+    }
+
+    reportPage.blocks = reportPage.blocks.map((block) =>
+      block.departmentId === 'dept-1'
+        ? {
+            ...block,
+            fields: {
+              ...block.fields,
+              weeklyStatusAndRisk:
+                '這是一段很長的會議說明內容，'.repeat(12) +
+                '用來驗證展開前後欄位標題都保持相同階層與節奏。',
+            },
+          }
+        : block
+    );
+
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 24 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
+    project.presentation.cover.versionInfo = 'v24 (已鎖定)';
+    project.presentation.summaryLines = 1;
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    const heading = screen.getByText('本周、下周辦理情形暨工作預警狀況說明');
+    expect(heading).toHaveAttribute('data-presentation-field-heading', 'true');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '展開全文' })[0]);
+    expect(screen.getByText('本周、下周辦理情形暨工作預警狀況說明')).toHaveAttribute(
+      'data-presentation-field-heading',
+      'true'
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: '收合全文' })[0]);
+    expect(screen.getByText('本周、下周辦理情形暨工作預警狀況說明')).toHaveAttribute(
+      'data-presentation-field-heading',
+      'true'
+    );
+  });
+
+  it('keeps report field content as the primary reading target beside strengthened headings', () => {
+    const project = createWorkspaceProject('project-heading-balance', '專案測試');
+    const reportPage = project.versions[0].pages.find((page) => page.type === 'report');
+    if (!reportPage || reportPage.type !== 'report') {
+      throw new Error('report page not found in fixture');
+    }
+
+    reportPage.blocks = reportPage.blocks.map((block) =>
+      block.departmentId === 'dept-1'
+        ? {
+            ...block,
+            fields: {
+              ...block.fields,
+              supportPlan: '跨部門協調完成後，預計於本週五前完成修正並回報。',
+            },
+          }
+        : block
+    );
+
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 25 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
+    project.presentation.cover.versionInfo = 'v25 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    expect(screen.getByText('建請協助方案（公關機制/跨部門協調）')).toHaveAttribute(
+      'data-presentation-field-heading',
+      'true'
+    );
+    expect(screen.getByText('跨部門協調完成後，預計於本週五前完成修正並回報。')).toHaveAttribute(
+      'data-presentation-field-content',
+      'true'
+    );
   });
 
   it('shows a single image with inline note on image slides', () => {
@@ -547,5 +651,219 @@ describe('PresentationPage', () => {
 
     expect(screen.getByText('已完成補簽（逾期）')).toBeInTheDocument();
     expect(screen.getByText(/狀態：逾期補簽/)).toBeInTheDocument();
+  });
+
+  // End slide tests
+  it('enters end slide when clicking next on the last content slide', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 30 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v30 (已鎖定)';
+    project.presentation.endSlide.title = '會議圓滿結束';
+    project.presentation.endSlide.subtitle = '感謝各位參與';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to the last slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 1; i < totalSlides; i++) {
+      fireEvent.click(screen.getByRole('button', { name: '下一張' }));
+    }
+
+    // Now click the "結束頁" button (which replaces "下一張" on last slide)
+    fireEvent.click(screen.getByRole('button', { name: '結束頁' }));
+
+    expect(screen.getByTestId('presentation-end-surface')).toBeInTheDocument();
+    expect(screen.getByText('會議圓滿結束')).toBeInTheDocument();
+    expect(screen.getByText('感謝各位參與')).toBeInTheDocument();
+  });
+
+  it('enters end slide when pressing right arrow on the last content slide', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 31 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v31 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to the last slide using keyboard
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 1; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    // Press right arrow one more time to enter end slide
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+
+    expect(screen.getByTestId('presentation-end-surface')).toBeInTheDocument();
+  });
+
+  it('returns to previous slide from end slide using left arrow key', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 32 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v32 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    expect(screen.getByTestId('presentation-end-surface')).toBeInTheDocument();
+
+    // Press left arrow to go back to report mode
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+
+    expect(screen.getByTestId('presentation-toolbar')).toBeInTheDocument();
+  });
+
+  it('returns to previous slide from end slide using 上一張 button', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 33 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v33 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide via last slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 1; i < totalSlides; i++) {
+      fireEvent.click(screen.getByRole('button', { name: '下一張' }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: '結束頁' }));
+
+    expect(screen.getByTestId('presentation-end-surface')).toBeInTheDocument();
+
+    // Click 上一張 to go back to report mode
+    fireEvent.click(screen.getByRole('button', { name: '上一張' }));
+
+    expect(screen.getByTestId('presentation-toolbar')).toBeInTheDocument();
+  });
+
+  it('returns to cover from end slide using 回封面 button', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 34 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v34 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    expect(screen.getByTestId('presentation-end-surface')).toBeInTheDocument();
+
+    // Click 回封面
+    fireEvent.click(screen.getByRole('button', { name: '回封面' }));
+
+    expect(screen.getByTestId('presentation-cover-surface')).toBeInTheDocument();
+  });
+
+  it('restarts presentation from end slide using 重新開始 button', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 35 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v35 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    expect(screen.getByTestId('presentation-end-surface')).toBeInTheDocument();
+
+    // Click 重新開始
+    fireEvent.click(screen.getByRole('button', { name: '重新開始' }));
+
+    expect(screen.getByTestId('presentation-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('presentation-footer')).toHaveTextContent('1/' + totalSlides);
+  });
+
+  it('displays default end slide text when settings are empty', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 36 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v36 (已鎖定)';
+    project.presentation.endSlide = { title: '', subtitle: '', supportingText: '' };
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    expect(screen.getByText('簡報結束')).toBeInTheDocument();
+    expect(screen.getByText('感謝聆聽')).toBeInTheDocument();
+  });
+
+  it('displays supporting text when configured', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 37 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v37 (已鎖定)';
+    project.presentation.endSlide = {
+      title: '會議結束',
+      subtitle: '謝謝大家',
+      supportingText: '會議記錄將於會後寄送\n請確認行動項目'
+    };
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    expect(screen.getByText('會議結束')).toBeInTheDocument();
+    expect(screen.getByText('謝謝大家')).toBeInTheDocument();
+    expect(screen.getByText(/會議記錄將於會後寄送/)).toBeInTheDocument();
+  });
+
+  it('shows end slide footer indicator', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 38 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v38 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    // Navigate to end slide
+    const footer = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(footer.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    const endFooter = screen.getByTestId('presentation-footer');
+    expect(endFooter).toHaveTextContent('結束頁');
   });
 });

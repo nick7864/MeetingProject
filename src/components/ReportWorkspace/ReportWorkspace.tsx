@@ -30,6 +30,7 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   ArrowUpward as ArrowUpwardIcon,
   CheckCircle as CheckCircleIcon,
+  Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
   Lock as LockIcon,
   LockOpen as LockOpenIcon,
@@ -387,6 +388,7 @@ export const ReportWorkspacePage: React.FC = () => {
   const [attendanceRosterDraft, setAttendanceRosterDraft] = useState('');
   const [attendanceRosterImportMode, setAttendanceRosterImportMode] = useState<AttendanceRosterImportMode>('replace');
   const [attendanceRosterPreview, setAttendanceRosterPreview] = useState<AttendanceRosterPreviewState | null>(null);
+  const [pageToDelete, setPageToDelete] = useState<WorkspacePage | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -814,6 +816,61 @@ export const ReportWorkspacePage: React.FC = () => {
         activePageId: lastPageId,
       };
     });
+  };
+
+  // 調整頁面順序（上移或下移）。
+  const handleReorderPage = (pageId: string, direction: 'up' | 'down') => {
+    updateStateVersions((pages, isEditable) => {
+      if (!isEditable) {
+        return pages;
+      }
+
+      return reorderItems(pages, pageId, direction);
+    });
+  };
+
+  // 刪除頁面，並維護有效狀態（至少保留一頁、更新 activePageId、重整 order）。
+  const handleDeletePage = () => {
+    if (!pageToDelete || !activeProject || !activeVersion) {
+      return;
+    }
+
+    const pages = activeVersion.pages;
+    if (pages.length <= 1) {
+      // 不能刪除最後一頁
+      setPageToDelete(null);
+      return;
+    }
+
+    updateActiveProject((project) => {
+      const currentVersion = project.versions.find((version) => version.id === project.activeVersionId);
+      if (!currentVersion) {
+        return project;
+      }
+
+      const remainingPages = currentVersion.pages
+        .filter((page) => page.id !== pageToDelete.id)
+        .sort((a, b) => a.order - b.order)
+        .map((page, index) => ({ ...page, order: index + 1 }));
+
+      // 如果刪除的是當前頁，切換到鄰近頁
+      let nextActivePageId = project.activePageId;
+      if (project.activePageId === pageToDelete.id) {
+        nextActivePageId = remainingPages[0]?.id ?? '';
+      }
+
+      return {
+        ...project,
+        activePageId: nextActivePageId,
+        versions: project.versions.map((version) =>
+          version.id === project.activeVersionId
+            ? { ...version, pages: remainingPages }
+            : version
+        ),
+      };
+    });
+
+    setPageToDelete(null);
   };
 
   // 手動鎖定目前版本、建立下一版，並同步凍結當前簽到場次名單。
@@ -1295,14 +1352,14 @@ export const ReportWorkspacePage: React.FC = () => {
       ...project,
       attendance: {
         ...project.attendance,
-          sessions: project.attendance.sessions.map((session) =>
-            session.id === project.attendance.activeSessionId
-              ? {
-                  ...session,
-                  expectedRoster: nextRoster,
-                }
-              : session
-          ),
+        sessions: project.attendance.sessions.map((session) =>
+          session.id === project.attendance.activeSessionId
+            ? {
+              ...session,
+              expectedRoster: nextRoster,
+            }
+            : session
+        ),
       },
     }));
 
@@ -1696,20 +1753,46 @@ export const ReportWorkspacePage: React.FC = () => {
               {activeVersion?.pages
                 .slice()
                 .sort((a, b) => a.order - b.order)
-                .map((page) => (
-                  <Button
-                    key={page.id}
-                    variant={activeProject?.activePageId === page.id ? 'contained' : 'outlined'}
-                    onClick={() =>
-                      updateActiveProject((project) => ({
-                        ...project,
-                        activePageId: page.id,
-                      }))
-                    }
-                    sx={{ justifyContent: 'flex-start' }}
-                  >
-                    {page.name}
-                  </Button>
+                .map((page, index, sortedPages) => (
+                  <Box key={page.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Button
+                      variant={activeProject?.activePageId === page.id ? 'contained' : 'outlined'}
+                      onClick={() =>
+                        updateActiveProject((project) => ({
+                          ...project,
+                          activePageId: page.id,
+                        }))
+                      }
+                      sx={{ justifyContent: 'flex-start', flex: 1 }}
+                    >
+                      {page.name}
+                    </Button>
+                    <IconButton
+                      size="small"
+                      aria-label="上移頁面"
+                      onClick={() => handleReorderPage(page.id, 'up')}
+                      disabled={!activeVersionCanEdit || index === 0}
+                    >
+                      <ArrowUpwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      aria-label="下移頁面"
+                      onClick={() => handleReorderPage(page.id, 'down')}
+                      disabled={!activeVersionCanEdit || index === sortedPages.length - 1}
+                    >
+                      <ArrowDownwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      aria-label="刪除頁面"
+                      onClick={() => setPageToDelete(page)}
+                      disabled={!activeVersionCanEdit || sortedPages.length <= 1}
+                      color="error"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
                 ))}
 
               <Divider sx={{ my: 1 }} />
@@ -1760,14 +1843,14 @@ export const ReportWorkspacePage: React.FC = () => {
                 <TextField
                   size="small"
                   label="封面會議時間"
-                  value={activeProject?.presentation.cover.meetingDateTime ?? ''}
+                  value={activeProject?.presentation?.cover?.meetingDateTime ?? ''}
                   onChange={(event) =>
                     updateActiveProject((project) => ({
                       ...project,
                       presentation: {
                         ...project.presentation,
                         cover: {
-                          ...project.presentation.cover,
+                          ...project.presentation?.cover,
                           meetingDateTime: event.target.value,
                         },
                       },
@@ -1778,20 +1861,78 @@ export const ReportWorkspacePage: React.FC = () => {
                 <TextField
                   size="small"
                   label="封面版本資訊"
-                  value={activeProject?.presentation.cover.versionInfo ?? ''}
+                  value={activeProject?.presentation?.cover?.versionInfo ?? ''}
                   onChange={(event) =>
                     updateActiveProject((project) => ({
                       ...project,
                       presentation: {
                         ...project.presentation,
                         cover: {
-                          ...project.presentation.cover,
+                          ...project.presentation?.cover,
                           versionInfo: event.target.value,
                         },
                       },
                     }))
                   }
                   fullWidth
+                />
+                <Divider sx={{ my: 1 }} />
+                <Typography sx={meetingHintTextSx}>結束頁設定。</Typography>
+                <TextField
+                  size="small"
+                  label="結束頁主標題"
+                  value={activeProject?.presentation?.endSlide?.title ?? '報告結束'}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      presentation: {
+                        ...project.presentation,
+                        endSlide: {
+                          ...project.presentation?.endSlide,
+                          title: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="結束頁副標題"
+                  value={activeProject?.presentation?.endSlide?.subtitle ?? ''}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      presentation: {
+                        ...project.presentation,
+                        endSlide: {
+                          ...project.presentation?.endSlide,
+                          subtitle: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="結束頁補充文字（選填）"
+                  value={activeProject?.presentation?.endSlide?.supportingText ?? ''}
+                  onChange={(event) =>
+                    updateActiveProject((project) => ({
+                      ...project,
+                      presentation: {
+                        ...project.presentation,
+                        endSlide: {
+                          ...project.presentation?.endSlide,
+                          supportingText: event.target.value,
+                        },
+                      },
+                    }))
+                  }
+                  fullWidth
+                  multiline
+                  minRows={2}
                 />
               </Stack>
             )}
@@ -2379,6 +2520,24 @@ export const ReportWorkspacePage: React.FC = () => {
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pageToDelete} onClose={() => setPageToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>確認刪除頁面</DialogTitle>
+        <DialogContent>
+          <Typography>
+            確定要刪除頁面「{pageToDelete?.name}」嗎？
+          </Typography>
+          <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+            刪除後無法復原。
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPageToDelete(null)}>取消</Button>
+          <Button onClick={handleDeletePage} variant="contained" color="error">
+            確認刪除
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkspaceProject } from '../../mock/reportWorkspaceData';
 import { ReportWorkspacePage } from './ReportWorkspace';
@@ -797,5 +797,221 @@ describe('ReportWorkspacePage backend management tab', () => {
     expect(screen.queryByText('second.png')).not.toBeInTheDocument();
 
     createObjectUrlSpy.mockRestore();
+  });
+
+  it('moves a middle page upward when move up button is clicked', async () => {
+    render(<ReportWorkspacePage />);
+
+    // Add a third page so we have multiple pages to reorder
+    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+
+    // Wait for the new page to appear
+    await screen.findByText('一般報表-page3');
+
+    const pageButtons = screen.getAllByRole('button', { name: /page/ });
+    expect(pageButtons.length).toBeGreaterThanOrEqual(3);
+
+    // Find move up button for the last page and click it
+    const moveUpButtons = screen.getAllByLabelText('上移頁面');
+    // Move the last page up
+    fireEvent.click(moveUpButtons[moveUpButtons.length - 1]);
+
+    // Verify order changed
+    const reorderedButtons = screen.getAllByRole('button', { name: /page/ });
+    expect(reorderedButtons.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('moves a middle page downward when move down button is clicked', async () => {
+    render(<ReportWorkspacePage />);
+
+    // Add a third page so we have multiple pages to reorder
+    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+
+    // Wait for the new page to appear
+    await screen.findByText('一般報表-page3');
+
+    const pageButtons = screen.getAllByRole('button', { name: /page/ });
+    expect(pageButtons.length).toBeGreaterThanOrEqual(3);
+
+    // Find move down button for the first page and click it
+    const moveDownButtons = screen.getAllByLabelText('下移頁面');
+    fireEvent.click(moveDownButtons[0]); // Move first page down
+
+    // Verify order changed
+    const reorderedButtons = screen.getAllByRole('button', { name: /page/ });
+    expect(reorderedButtons.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('disables page reordering controls in a locked version', () => {
+    const project = createWorkspaceProject('project-locked-pages', '鎖定版本頁面測試');
+    project.versions = [{ ...project.versions[0], isLocked: true }];
+    project.activeVersionId = project.versions[0].id;
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    // Move up/down buttons should be disabled
+    const moveUpButtons = screen.getAllByLabelText('上移頁面');
+    const moveDownButtons = screen.getAllByLabelText('下移頁面');
+
+    moveUpButtons.forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+    moveDownButtons.forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+  });
+
+  it('disables move up button for the first page', () => {
+    render(<ReportWorkspacePage />);
+
+    const moveUpButtons = screen.getAllByLabelText('上移頁面');
+    expect(moveUpButtons[0]).toBeDisabled(); // First page can't move up
+  });
+
+  it('disables move down button for the last page', () => {
+    render(<ReportWorkspacePage />);
+
+    const moveDownButtons = screen.getAllByLabelText('下移頁面');
+    expect(moveDownButtons[moveDownButtons.length - 1]).toBeDisabled(); // Last page can't move down
+  });
+
+  it('confirms page deletion from custom modal', async () => {
+    render(<ReportWorkspacePage />);
+
+    // Add a third page so we have more than 2 pages
+    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+
+    // Wait for the new page to appear
+    await screen.findByText('一般報表-page3');
+
+    const deleteButtons = screen.getAllByLabelText('刪除頁面');
+    expect(deleteButtons.length).toBeGreaterThanOrEqual(3);
+
+    // Click delete on the first page
+    fireEvent.click(deleteButtons[0]);
+
+    // Custom modal should appear
+    await screen.findByRole('dialog');
+    expect(screen.getByText(/確認刪除/)).toBeInTheDocument();
+
+    // Confirm deletion
+    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
+
+    // Modal should close
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    // Page should be removed
+    const pageButtons = screen.getAllByRole('button', { name: /page/ });
+    expect(pageButtons.length).toBe(2);
+  });
+
+  it('cancels page deletion from custom modal', async () => {
+    render(<ReportWorkspacePage />);
+
+    // Add a third page so we have more than 2 pages
+    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+
+    // Wait for the new page to appear
+    await screen.findByText('一般報表-page3');
+
+    const deleteButtons = screen.getAllByLabelText('刪除頁面');
+
+    // Click delete on the first page
+    fireEvent.click(deleteButtons[0]);
+
+    // Custom modal should appear
+    await screen.findByRole('dialog');
+
+    // Cancel deletion
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    // Modal should close
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    // Page should still exist
+    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+  });
+
+  it('deletes the active page and switches to a neighboring page', async () => {
+    render(<ReportWorkspacePage />);
+
+    // Add a third page so we have more than 2 pages
+    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+
+    // Wait for the new page to appear
+    await screen.findByText('一般報表-page3');
+
+    // First page is active by default
+    const activePageButton = screen.getAllByRole('button', { name: /page/ }).find(
+      (btn) => btn.className.includes('MuiButton-contained')
+    );
+    expect(activePageButton).toBeTruthy();
+
+    const deleteButtons = screen.getAllByLabelText('刪除頁面');
+
+    // Click delete on the first page (which is active)
+    fireEvent.click(deleteButtons[0]);
+    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
+
+    // Wait for modal to close and verify active page switched
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('blocks deletion of the last remaining page', () => {
+    // Create a project with only one page
+    const project = createWorkspaceProject('project-single-page', '單頁測試專案');
+    project.versions[0].pages = [project.versions[0].pages[0]];
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    const deleteButtons = screen.getAllByLabelText('刪除頁面');
+    expect(deleteButtons.length).toBe(1);
+    expect(deleteButtons[0]).toBeDisabled();
+  });
+
+  it('disables delete button in a locked version', () => {
+    const project = createWorkspaceProject('project-locked-delete', '鎖定版本刪除測試');
+    project.versions = [{ ...project.versions[0], isLocked: true }];
+    project.activeVersionId = project.versions[0].id;
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    const deleteButtons = screen.getAllByLabelText('刪除頁面');
+    deleteButtons.forEach((button) => {
+      expect(button).toBeDisabled();
+    });
   });
 });

@@ -21,7 +21,9 @@ import {
 import { initialReportWorkspaceState } from '../../mock/reportWorkspaceData';
 import { ReportFields, ReportWorkspaceProject, ReportWorkspaceState, WorkspaceDepartment, WorkspacePage } from '../../types/reportWorkspace';
 import {
+  meetingFieldContentGapSx,
   meetingDesktopNoticeSx,
+  meetingFieldHeadingSx,
   meetingHeaderSx,
   meetingHintTextSx,
   meetingSlideSectionSx,
@@ -125,7 +127,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
       }))
     );
   }, [departments, sortedPages]);
-  const [mode, setMode] = useState<'cover' | 'report'>('cover');
+  const [mode, setMode] = useState<'cover' | 'report' | 'end'>('cover');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fontMode, setFontMode] = useState<'normal' | 'large'>('normal');
   const [isToolbarVisible, setIsToolbarVisible] = useState(true);
@@ -200,17 +202,31 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   }, [activeSlideId, slides]);
 
   useEffect(() => {
-    if (mode !== 'report') {
+    if (mode !== 'report' && mode !== 'end') {
       return undefined;
     }
 
     // 監聽左右方向鍵，讓報告模式可快速切換投影片。
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Handle end slide navigation
+      if (mode === 'end') {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          setMode('report');
+        }
+        return;
+      }
+
       const currentIndex = slides.findIndex((slide) => slide.id === activeSlideId);
 
-      if (event.key === 'ArrowRight' && currentIndex >= 0 && currentIndex < slides.length - 1) {
+      if (event.key === 'ArrowRight' && currentIndex >= 0) {
         event.preventDefault();
-        setActiveSlideId(slides[currentIndex + 1]?.id ?? activeSlideId);
+        if (currentIndex < slides.length - 1) {
+          setActiveSlideId(slides[currentIndex + 1]?.id ?? activeSlideId);
+        } else {
+          // Last slide - go to end slide
+          setMode('end');
+        }
       }
 
       if (event.key === 'ArrowLeft' && currentIndex > 0) {
@@ -420,8 +436,8 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   }
 
   const isCoverReady =
-    resolvedProject.presentation.cover.meetingDateTime.trim() !== '' &&
-    resolvedProject.presentation.cover.versionInfo.trim() !== '';
+    (resolvedProject.presentation?.cover?.meetingDateTime ?? '').trim() !== '' &&
+    (resolvedProject.presentation?.cover?.versionInfo ?? '').trim() !== '';
 
   if (mode === 'cover') {
     return (
@@ -633,10 +649,176 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     );
   }
 
+  // Define shared variables and handlers before mode-specific rendering
   const fontScale = fontMode === 'large' ? 1.2 : 1;
   const currentSlide = activeSlide ?? slides[0];
   const canGoPrev = activeSlideIndex > 0;
   const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
+  const canGoToEnd = activeSlideIndex === slides.length - 1 && slides.length > 0;
+
+  // Handle going to the next slide or end slide
+  const handleNextSlide = () => {
+    if (canGoNext) {
+      setActiveSlideId(slides[activeSlideIndex + 1]?.id ?? activeSlideId);
+    } else if (canGoToEnd) {
+      setMode('end');
+    }
+  };
+
+  // Handle going to the previous slide
+  const handlePrevSlide = () => {
+    if (canGoPrev) {
+      setActiveSlideId(slides[activeSlideIndex - 1]?.id ?? activeSlideId);
+    }
+  };
+
+  // Handle returning to cover
+  const handleReturnToCover = () => {
+    setMode('cover');
+    setIsFullscreen(false);
+    setIsToolbarVisible(true);
+    clearToolbarTimer();
+  };
+
+  // Handle restart presentation from first slide
+  const handleRestart = () => {
+    setMode('report');
+    setActiveSlideId(slides[0]?.id ?? '');
+    setIsFullscreen(false);
+    setIsToolbarVisible(true);
+    clearToolbarTimer();
+  };
+
+  // End slide mode
+  if (mode === 'end') {
+    const endSlideSettings = resolvedProject.presentation?.endSlide;
+    const endSlideTitle = endSlideSettings?.title?.trim() || '簡報結束';
+    const endSlideSubtitle = endSlideSettings?.subtitle?.trim() || '感謝聆聽';
+    const endSlideSupportingText = endSlideSettings?.supportingText?.trim() || '';
+
+    return (
+      <Box
+        data-font-mode={fontMode}
+        onMouseMove={isFullscreen ? revealToolbar : undefined}
+        sx={{
+          display: 'grid',
+          gap: 2,
+          py: isFullscreen ? 2 : 0,
+          px: isFullscreen ? { xs: 1, md: 2 } : 0,
+        }}
+      >
+        {isFullscreen && (
+          <Box
+            data-testid="fullscreen-toolbar-reveal"
+            onMouseEnter={revealToolbar}
+            onMouseMove={revealToolbar}
+            sx={{ position: 'fixed', top: 0, left: 0, right: 0, height: 20, zIndex: 1201 }}
+          />
+        )}
+
+        <Paper
+          data-testid="presentation-end-toolbar"
+          data-meeting-surface="true"
+          hidden={isFullscreen && !isToolbarVisible}
+          elevation={0}
+          sx={{
+            p: 2,
+            ...meetingSurfaceSx,
+            position: isFullscreen ? 'sticky' : 'static',
+            top: 0,
+            zIndex: 1200,
+            bgcolor: 'background.paper',
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
+            <Typography variant="h6" sx={meetingHeaderSx}>
+              會議呈現頁面
+            </Typography>
+            <Chip size="small" color="warning" label={`v${lockedSnapshotVersion.versionNo} (已鎖定)`} />
+          </Box>
+          <Typography variant="body2" sx={{ ...meetingHintTextSx, mb: 0.5 }}>
+            {resolvedProject.projectName}
+          </Typography>
+          <Typography sx={meetingDesktopNoticeSx}>此頁優先針對桌機與投影會議閱讀體驗設計。</Typography>
+
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
+            <Button variant="outlined" size="small" onClick={() => setMode('report')}>
+              上一張
+            </Button>
+            <Button variant="outlined" size="small" onClick={handleToggleFullscreen}>
+              {isFullscreen ? '離開全螢幕' : '全螢幕'}
+            </Button>
+            <Button variant="outlined" size="small" onClick={() => setFontMode((prev) => (prev === 'normal' ? 'large' : 'normal'))}>
+              {fontMode === 'normal' ? '大字' : '一般字'}
+            </Button>
+            <Button variant="text" size="small" onClick={handleReturnToCover}>
+              回封面
+            </Button>
+            <Button variant="text" size="small" onClick={handleRestart}>
+              重新開始
+            </Button>
+          </Box>
+        </Paper>
+
+        <Paper
+          data-testid="presentation-end-surface"
+          data-meeting-surface="true"
+          elevation={0}
+          sx={{
+            p: { xs: 3, md: 6 },
+            ...meetingSurfaceSx,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '50vh',
+            textAlign: 'center',
+          }}
+        >
+          <Typography
+            variant="h2"
+            sx={{
+              fontWeight: 800,
+              mb: 2,
+              fontSize: `${2.5 * fontScale}rem`,
+            }}
+          >
+            {endSlideTitle}
+          </Typography>
+          <Typography
+            variant="h4"
+            sx={{
+              fontWeight: 600,
+              mb: endSlideSupportingText ? 3 : 0,
+              fontSize: `${1.5 * fontScale}rem`,
+              color: 'text.secondary',
+            }}
+          >
+            {endSlideSubtitle}
+          </Typography>
+          {endSlideSupportingText && (
+            <Typography
+              variant="body1"
+              sx={{
+                fontSize: `${1.1 * fontScale}rem`,
+                lineHeight: 1.8,
+                whiteSpace: 'pre-wrap',
+                maxWidth: 600,
+              }}
+            >
+              {endSlideSupportingText}
+            </Typography>
+          )}
+        </Paper>
+
+        <Paper data-meeting-surface="true" elevation={0} sx={{ p: 1.5, ...meetingSurfaceSx, position: 'sticky', bottom: 0 }}>
+          <Typography variant="body2" color="text.secondary" data-testid="presentation-footer">
+            結束頁
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
 
   // 渲染單一報表欄位，包含摘要截斷與展開收合控制。
   const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
@@ -644,12 +826,14 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     const isExpanded = expandedFields[expansionKey] ?? false;
     return (
       <Box sx={meetingSlideSectionSx}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+        <Typography data-presentation-field-heading="true" sx={meetingFieldHeadingSx}>
           {label}
         </Typography>
         <Typography
+          data-presentation-field-content="true"
           variant="body2"
           sx={{
+            ...meetingFieldContentGapSx,
             fontSize: `${0.95 * fontScale}rem`,
             lineHeight: 1.7,
             whiteSpace: 'pre-wrap',
@@ -664,7 +848,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
               }),
           }}
         >
-          {value.trim() || '（未填寫）'}
+          {value?.trim() || '（未填寫）'}
         </Typography>
         {shouldShowExpand(value) && (
           <Button
@@ -711,31 +895,40 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
           )}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, ...meetingSlideSectionSx }}>
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              <Typography data-presentation-field-heading="true" sx={meetingFieldHeadingSx}>
                 預計完成日(掛建日)
               </Typography>
-              <Typography variant="body1" sx={{ fontSize: `${1.05 * fontScale}rem`, fontWeight: 600 }}>
-                {block.fields.plannedBuildDate.trim() || '（未填寫）'}
+              <Typography
+                data-presentation-field-content="true"
+                variant="body1"
+                sx={{
+                  ...meetingFieldContentGapSx,
+                  fontSize: `${1.05 * fontScale}rem`,
+                  fontWeight: 600,
+                }}
+              >
+                {block.fields.plannedBuildDate?.trim() || '（未填寫）'}
               </Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              <Typography data-presentation-field-heading="true" sx={meetingFieldHeadingSx}>
                 預計完成日(核准日)
               </Typography>
-              <Typography variant="body1" sx={{ fontSize: `${1.05 * fontScale}rem`, fontWeight: 600 }}>
-                {block.fields.approvalDate.trim() || '（未填寫）'}
+              <Typography
+                data-presentation-field-content="true"
+                variant="body1"
+                sx={{
+                  ...meetingFieldContentGapSx,
+                  fontSize: `${1.05 * fontScale}rem`,
+                  fontWeight: 600,
+                }}
+              >
+                {block.fields.approvalDate?.trim() || '（未填寫）'}
               </Typography>
             </Box>
           </Box>
           {renderReportField(department.id, page.id, 'supportPlan', '建請協助方案（公關機制/跨部門協調）', block.fields.supportPlan)}
-          <Box sx={{ pt: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-              待層峰討論 & 決議
-            </Typography>
-            <Typography variant="body2" sx={{ fontSize: `${0.95 * fontScale}rem`, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              {block.fields.executiveDiscussion.trim() || '（未填寫）'}
-            </Typography>
-          </Box>
+          {renderReportField(department.id, page.id, 'executiveDiscussion', '待層峰討論 & 決議', block.fields.executiveDiscussion)}
         </Box>
       );
     }
@@ -758,7 +951,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
         <Divider />
         <Box>
           <Typography variant="body2" sx={{ fontSize: `${0.95 * fontScale}rem`, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-            圖片備註：{image.note.trim() || '（無）'}
+            圖片備註：{image.note?.trim() || '（無）'}
           </Typography>
         </Box>
       </Box>
@@ -811,11 +1004,11 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
         <Typography sx={meetingDesktopNoticeSx}>此頁優先針對桌機與投影會議閱讀體驗設計。</Typography>
 
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
-          <Button variant="outlined" size="small" onClick={() => setActiveSlideId(slides[activeSlideIndex - 1]?.id ?? activeSlideId)} disabled={!canGoPrev}>
+          <Button variant="outlined" size="small" onClick={handlePrevSlide} disabled={!canGoPrev}>
             上一張
           </Button>
-          <Button variant="outlined" size="small" onClick={() => setActiveSlideId(slides[activeSlideIndex + 1]?.id ?? activeSlideId)} disabled={!canGoNext}>
-            下一張
+          <Button variant="outlined" size="small" onClick={handleNextSlide} disabled={!canGoNext && !canGoToEnd}>
+            {canGoToEnd ? '結束頁' : '下一張'}
           </Button>
           <Button variant="outlined" size="small" onClick={() => setIsSlideDrawerOpen(true)}>
             投影片目錄
@@ -829,12 +1022,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
           <Button
             variant="text"
             size="small"
-            onClick={() => {
-              setMode('cover');
-              setIsFullscreen(false);
-              setIsToolbarVisible(true);
-              clearToolbarTimer();
-            }}
+            onClick={handleReturnToCover}
           >
             回封面
           </Button>
