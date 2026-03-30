@@ -19,7 +19,12 @@ import {
   Typography,
 } from '@mui/material';
 import { initialReportWorkspaceState } from '../../mock/reportWorkspaceData';
-import { ReportFields, ReportWorkspaceProject, ReportWorkspaceState, WorkspaceDepartment, WorkspacePage } from '../../types/reportWorkspace';
+import { EmphasisCapableContent, ReportFields, ReportWorkspaceProject, ReportWorkspaceState, WorkspaceDepartment, WorkspacePage } from '../../types/reportWorkspace';
+import {
+  extractPlainText,
+  fieldSupportsEmphasis,
+} from '../../utils/emphasisContent';
+import { EmphasisContentRenderer } from '../EmphasisContentRenderer';
 import {
   meetingDesktopNoticeSx,
   meetingHeaderSx,
@@ -639,16 +644,19 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   const canGoNext = activeSlideIndex >= 0 && activeSlideIndex < slides.length - 1;
 
   // 渲染單一報表欄位，包含摘要截斷與展開收合控制。
-  const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
+  const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: EmphasisCapableContent) => {
     const expansionKey = buildFieldExpansionKey(departmentId, pageId, field);
     const isExpanded = expandedFields[expansionKey] ?? false;
+    const plainText = extractPlainText(value);
+    const supportsEmphasis = fieldSupportsEmphasis(field);
+
     return (
       <Box sx={meetingSlideSectionSx}>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
           {label}
         </Typography>
-        <Typography
-          variant="body2"
+        <Box
+          data-presentation-field-content="true"
           sx={{
             fontSize: `${0.95 * fontScale}rem`,
             lineHeight: 1.7,
@@ -664,9 +672,27 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
               }),
           }}
         >
-          {value.trim() || '（未填寫）'}
-        </Typography>
-        {shouldShowExpand(value) && (
+          {supportsEmphasis ? (
+            <EmphasisContentRenderer
+              content={value}
+              baseFontSize={0.95 * fontScale}
+              lineHeight={1.7}
+            />
+          ) : (
+            <Typography
+              component="span"
+              variant="body2"
+              sx={{
+                fontSize: `${0.95 * fontScale}rem`,
+                lineHeight: 1.7,
+              }}
+            >
+              {plainText.trim() || '（未填寫）'}
+            </Typography>
+          )}
+          {plainText.trim() || !supportsEmphasis ? null : '（未填寫）'}
+        </Box>
+        {shouldShowExpand(plainText) && (
           <Button
             variant="text"
             size="small"
@@ -728,13 +754,18 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
             </Box>
           </Box>
           {renderReportField(department.id, page.id, 'supportPlan', '建請協助方案（公關機制/跨部門協調）', block.fields.supportPlan)}
-          <Box sx={{ pt: 1.5 }}>
+          <Box sx={{ pt: 1.5, ...meetingSlideSectionSx }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
               待層峰討論 & 決議
             </Typography>
-            <Typography variant="body2" sx={{ fontSize: `${0.95 * fontScale}rem`, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              {block.fields.executiveDiscussion.trim() || '（未填寫）'}
-            </Typography>
+            <Box data-presentation-field-content="true" sx={{ fontSize: `${0.95 * fontScale}rem`, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              <EmphasisContentRenderer
+                content={block.fields.executiveDiscussion}
+                baseFontSize={0.95 * fontScale}
+                lineHeight={1.7}
+              />
+              {!extractPlainText(block.fields.executiveDiscussion).trim() && '（未填寫）'}
+            </Box>
           </Box>
         </Box>
       );

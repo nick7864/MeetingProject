@@ -192,6 +192,49 @@ describe('PresentationPage', () => {
     expect(screen.getAllByRole('button', { name: '展開全文' })[0]).toBeInTheDocument();
   });
 
+  it('keeps emphasis rendering consistent between summary and expanded states', () => {
+    const project = createWorkspaceProject('project-emphasis-summary', '強調摘要一致性');
+    const reportPage = project.versions[0].pages.find((page) => page.type === 'report');
+    if (!reportPage || reportPage.type !== 'report') {
+      throw new Error('report page not found in fixture');
+    }
+
+    reportPage.blocks = reportPage.blocks.map((block) =>
+      block.departmentId === 'dept-1'
+        ? {
+          ...block,
+          fields: {
+            ...block.fields,
+            weeklyStatusAndRisk: [
+              { text: '重要風險', emphasis: { bold: true, color: 'error', larger: true } },
+              { text: `\n${'後續追蹤'.repeat(20)}` },
+            ],
+          },
+        }
+        : block
+    );
+
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 23 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
+    project.presentation.cover.versionInfo = 'v23 (已鎖定)';
+    project.presentation.summaryLines = 1;
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    const emphasizedText = screen.getByText('重要風險');
+    expect(emphasizedText).toHaveAttribute('data-emphasis-bold', 'true');
+    expect(emphasizedText).toHaveAttribute('data-emphasis-color', 'error');
+    expect(emphasizedText).toHaveAttribute('data-emphasis-larger', 'true');
+
+    fireEvent.click(screen.getAllByRole('button', { name: '展開全文' })[0]);
+
+    const emphasizedTextAfterExpand = screen.getByText('重要風險');
+    expect(emphasizedTextAfterExpand).toHaveAttribute('data-emphasis-bold', 'true');
+    expect(emphasizedTextAfterExpand).toHaveAttribute('data-emphasis-color', 'error');
+    expect(emphasizedTextAfterExpand).toHaveAttribute('data-emphasis-larger', 'true');
+  });
+
   it('shows a single image with inline note on image slides', () => {
     const project = createWorkspaceProject('project-test', '專案測試');
     const imagePage = project.versions[0].pages.find((page) => page.type === 'image');

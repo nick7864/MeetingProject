@@ -1,5 +1,6 @@
 import {
   DepartmentReportBlock,
+  EmphasisCapableContent,
   ReportFields,
   ReportWorkspaceProject,
   ReportWorkspaceState,
@@ -18,9 +19,10 @@ const createEmptyFields = (): ReportFields => ({
   workItem: '',
   plannedBuildDate: '',
   approvalDate: '',
-  weeklyStatusAndRisk: '',
-  supportPlan: '',
-  executiveDiscussion: '',
+  // Three narrative fields use structured content (empty segments)
+  weeklyStatusAndRisk: [] as EmphasisCapableContent,
+  supportPlan: [] as EmphasisCapableContent,
+  executiveDiscussion: [] as EmphasisCapableContent,
 });
 
 const createReportBlocks = (departments: WorkspaceDepartment[]): DepartmentReportBlock[] =>
@@ -194,7 +196,25 @@ export const cloneVersionForNext = (
       if (page.type === 'report') {
         return {
           ...page,
-          blocks: page.blocks.map((block) => ({ ...block })),
+          blocks: page.blocks.map((block) => ({
+            ...block,
+            // Deep-copy fields to preserve structured content (TextSegment[])
+            fields: {
+              workItem: block.fields.workItem,
+              plannedBuildDate: block.fields.plannedBuildDate,
+              approvalDate: block.fields.approvalDate,
+              // Deep-copy structured content arrays
+              weeklyStatusAndRisk: Array.isArray(block.fields.weeklyStatusAndRisk)
+                ? [...block.fields.weeklyStatusAndRisk]
+                : block.fields.weeklyStatusAndRisk,
+              supportPlan: Array.isArray(block.fields.supportPlan)
+                ? [...block.fields.supportPlan]
+                : block.fields.supportPlan,
+              executiveDiscussion: Array.isArray(block.fields.executiveDiscussion)
+                ? [...block.fields.executiveDiscussion]
+                : block.fields.executiveDiscussion,
+            },
+          })),
         };
       }
 

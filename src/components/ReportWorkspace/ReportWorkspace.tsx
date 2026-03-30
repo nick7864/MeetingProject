@@ -46,6 +46,7 @@ import {
   AttendanceExpectedMember,
   AttendanceRecord,
   DepartmentReportBlock,
+  EmphasisCapableContent,
   ReportFieldLimits,
   ReportFields,
   ReportWorkspaceProject,
@@ -59,6 +60,14 @@ import {
 } from '../../types/reportWorkspace';
 import { meetingHeaderSx, meetingHintTextSx, meetingSurfaceSx } from '../../styles/meetingSurface';
 import { DEFAULT_REPORT_FIELD_LIMITS } from '../../constants/reportFieldLimits';
+import {
+  extractPlainText,
+  fieldSupportsEmphasis,
+  getPlainTextLength,
+  plainToSegments,
+  truncateStructuredContent,
+} from '../../utils/emphasisContent';
+import { EmphasisEditor } from './EmphasisEditor';
 
 type AttendanceRosterImportMode = 'replace' | 'append';
 
@@ -236,12 +245,14 @@ const getVersionFieldLimitViolations = (
       fieldsMeta.forEach((meta) => {
         const value = block.fields[meta.key];
         const limit = fieldLimits[meta.key];
-        if (value.length > limit) {
+        // Use plain text length for character limit checking
+        const plainLength = getPlainTextLength(value);
+        if (plainLength > limit) {
           violations.push({
             pageId: page.id,
             departmentId: block.departmentId,
             field: meta.key,
-            length: value.length,
+            length: plainLength,
             limit,
           });
         }
@@ -904,7 +915,7 @@ export const ReportWorkspacePage: React.FC = () => {
     pageId: string,
     departmentId: string,
     field: keyof ReportFields,
-    value: string
+    value: EmphasisCapableContent
   ) => {
     if (!activeProject) {
       return;
@@ -920,14 +931,39 @@ export const ReportWorkspacePage: React.FC = () => {
       return;
     }
 
-    const isLegacyOverLimit = currentValue.length > fieldLimit;
-    if (isLegacyOverLimit && value.length >= currentValue.length) {
+    // Get plain text length for character counting
+    const currentPlainLength = getPlainTextLength(currentValue);
+    const isLegacyOverLimit = currentPlainLength > fieldLimit;
+    const incomingPlainText = extractPlainText(value);
+
+    if (isLegacyOverLimit && incomingPlainText.length >= currentPlainLength) {
       setSnackbar({ open: true, message: '此欄位為歷史超限內容，請先手動刪減。' });
       return;
     }
 
-    const nextValue = isLegacyOverLimit ? value : (value.length > fieldLimit ? value.slice(0, fieldLimit) : value);
-    if (!isLegacyOverLimit && nextValue !== value) {
+    let nextValue: EmphasisCapableContent;
+    let wasTruncated = false;
+
+    if (fieldSupportsEmphasis(field)) {
+      const structuredValue = Array.isArray(value) ? value : plainToSegments(value);
+      if (isLegacyOverLimit) {
+        nextValue = structuredValue;
+      } else {
+        const truncatedResult = truncateStructuredContent(structuredValue, fieldLimit);
+        nextValue = truncatedResult.content;
+        wasTruncated = truncatedResult.wasTruncated;
+      }
+    } else {
+      const nextPlainValue = isLegacyOverLimit
+        ? incomingPlainText
+        : incomingPlainText.length > fieldLimit
+          ? incomingPlainText.slice(0, fieldLimit)
+          : incomingPlainText;
+      wasTruncated = !isLegacyOverLimit && nextPlainValue !== incomingPlainText;
+      nextValue = nextPlainValue;
+    }
+
+    if (wasTruncated) {
       setSnackbar({ open: true, message: '內容超過上限，已自動截斷。' });
     }
 
@@ -2079,16 +2115,42 @@ export const ReportWorkspacePage: React.FC = () => {
                                   {fieldsMeta.map((meta) => {
                                     const fieldValue = block.fields[meta.key];
                                     const fieldLimit = activeFieldLimits[meta.key];
-                                    const fieldLength = fieldValue.length;
+                                    const fieldLength = getPlainTextLength(fieldValue);
                                     const nearLimit = fieldLength >= Math.floor(fieldLimit * 0.8);
                                     const overLimit = fieldLength > fieldLimit;
+                                    const helperText = (
+                                      <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                        <span>{`${fieldLength}/${fieldLimit}`}</span>
+                                        {nearLimit && <span>已達 80% 警戒</span>}
+                                        {overLimit && <span>此欄位已超限，需修正後才能鎖定版本</span>}
+                                      </Box>
+                                    );
+
+                                    if (fieldSupportsEmphasis(meta.key)) {
+                                      return (
+                                        <EmphasisEditor
+                                          key={meta.key}
+                                          label={meta.label}
+                                          value={fieldValue}
+                                          onChange={(nextValue) =>
+                                            handleFieldChange(activePage.id, block.departmentId, meta.key, nextValue)
+                                          }
+                                          minRows={meta.multiline}
+                                          disabled={!editable}
+                                          error={overLimit}
+                                          helperText={helperText}
+                                        />
+                                      );
+                                    }
+
+                                    const displayValue = extractPlainText(fieldValue);
 
                                     return (
                                       <TextField
                                         key={meta.key}
                                         label={meta.label}
                                         size="small"
-                                        value={fieldValue}
+                                        value={displayValue}
                                         onChange={(event) =>
                                           handleFieldChange(activePage.id, block.departmentId, meta.key, event.target.value)
                                         }
@@ -2096,13 +2158,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                         minRows={meta.multiline}
                                         disabled={!editable}
                                         error={overLimit}
-                                        helperText={
-                                          <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                            <span>{`${fieldLength}/${fieldLimit}`}</span>
-                                            {nearLimit && <span>已達 80% 警戒</span>}
-                                            {overLimit && <span>此欄位已超限，需修正後才能鎖定版本</span>}
-                                          </Box>
-                                        }
+                                        helperText={helperText}
                                         fullWidth
                                       />
                                     );

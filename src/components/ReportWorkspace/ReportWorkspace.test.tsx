@@ -798,4 +798,69 @@ describe('ReportWorkspacePage backend management tab', () => {
 
     createObjectUrlSpy.mockRestore();
   });
+
+  // =========================================================================
+  // Lightweight Text Emphasis Tests
+  // =========================================================================
+
+  it('stores narrative fields as structured content type', () => {
+    const project = createWorkspaceProject('emphasis-storage', '強調儲存測試');
+    const version = project.versions[0];
+    if (!version) throw new Error('version missing');
+    const page = version.pages.find((p) => p.type === 'report');
+    if (!page || page.type !== 'report') throw new Error('report page missing');
+    const block = page.blocks[0];
+    if (!block) throw new Error('block missing');
+
+    // Verify narrative fields are initialized as arrays (structured content)
+    expect(Array.isArray(block.fields.weeklyStatusAndRisk)).toBe(true);
+    expect(Array.isArray(block.fields.supportPlan)).toBe(true);
+    expect(Array.isArray(block.fields.executiveDiscussion)).toBe(true);
+
+    // Verify non-emphasis fields are strings
+    expect(typeof block.fields.workItem).toBe('string');
+    expect(typeof block.fields.plannedBuildDate).toBe('string');
+    expect(typeof block.fields.approvalDate).toBe('string');
+  });
+
+  it('shows emphasis editor toolbar only for the three supported narrative fields', () => {
+    render(<ReportWorkspacePage />);
+
+    const toolbars = screen.getAllByTestId('emphasis-editor-toolbar');
+    expect(toolbars.length).toBeGreaterThanOrEqual(3);
+    expect(toolbars.length % 3).toBe(0);
+
+    const workItemInputs = screen.getAllByLabelText('工作項目');
+    expect(workItemInputs.some((input) => input.getAttribute('contenteditable') === 'true')).toBe(false);
+
+  });
+
+  it('blocks lock when narrative fields exceed limit based on plain text length', () => {
+    const project = createWorkspaceProject('emphasis-limit-lock', '強調字數鎖定測試');
+    project.fieldLimits.weeklyStatusAndRisk = 10;
+    
+    const version = project.versions[0];
+    if (!version) throw new Error('version missing');
+    const page = version.pages.find((p) => p.type === 'report');
+    if (!page || page.type !== 'report') throw new Error('report page missing');
+    const block = page.blocks[0];
+    if (!block) throw new Error('block missing');
+
+    // Set structured content with long text
+    block.fields.weeklyStatusAndRisk = [{ text: 'This is a very long text that exceeds the limit' }];
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('button', { name: '鎖定目前版本' }));
+
+    expect(screen.getByText('仍有欄位超過字數上限，請先修正再鎖定。')).toBeInTheDocument();
+  });
 });
