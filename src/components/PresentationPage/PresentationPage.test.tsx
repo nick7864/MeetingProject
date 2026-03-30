@@ -393,11 +393,17 @@ describe('PresentationPage', () => {
     project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
     project.presentation.cover.versionInfo = 'v13 (已鎖定)';
     project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.authenticatedIdentity = {
+      memberId: 'member-manual-001',
+      memberName: '王小明',
+      departmentId: 'dept-1',
+    };
 
     render(<PresentationPage project={project} />);
 
     fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
-    fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明' } });
+    // Self sign-in now uses read-only identity confirmation
+    expect(screen.getByText('王小明')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
 
     expect(screen.getByText('已完成簽到（準時）')).toBeInTheDocument();
@@ -415,11 +421,17 @@ describe('PresentationPage', () => {
     project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
     project.presentation.cover.versionInfo = 'v14 (已鎖定)';
     project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.authenticatedIdentity = {
+      memberId: 'member-late-001',
+      memberName: '陳小華',
+      departmentId: 'dept-1',
+    };
 
     render(<PresentationPage project={project} />);
 
     fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
-    fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '陳小華' } });
+    // Self sign-in now uses read-only identity confirmation
+    expect(screen.getByText('陳小華')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
 
     expect(screen.getByText('已完成簽到（遲到）')).toBeInTheDocument();
@@ -464,18 +476,25 @@ describe('PresentationPage', () => {
     project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
     project.presentation.cover.versionInfo = 'v16 (已鎖定)';
     project.attendance.signInOpenedAt = '2026-03-25T13:00:00.000Z';
+    project.authenticatedIdentity = {
+      memberId: 'member-dup-001',
+      memberName: '王小明',
+      departmentId: 'dept-1',
+    };
 
     render(<PresentationPage project={project} />);
 
+    // First self sign-in with authenticated identity
     fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
-    fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明' } });
+    expect(screen.getByText('王小明')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
     expect(screen.getByText('已完成簽到（準時）')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明' } });
+    // Try to sign in again with same identity - should be blocked
     fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
     expect(screen.getByText('此人員已存在主簽到紀錄，請改用更正流程')).toBeInTheDocument();
 
+    // Switch to correction mode
     fireEvent.mouseDown(screen.getByLabelText('簽到方式'));
     fireEvent.click(screen.getByRole('option', { name: '更正' }));
     fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明-更正' } });
@@ -496,6 +515,12 @@ describe('PresentationPage', () => {
     project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
     project.presentation.cover.versionInfo = 'v18 (已鎖定)';
     project.attendance.signInOpenedAt = '2026-03-25T13:00:00.000Z';
+    // Set authenticated identity for first sign-in
+    project.authenticatedIdentity = {
+      memberId: 'member-samename-001',
+      memberName: '王小明',
+      departmentId: 'dept-1',
+    };
 
     const session = project.attendance.sessions[0];
     if (!session) {
@@ -508,18 +533,217 @@ describe('PresentationPage', () => {
 
     render(<PresentationPage project={project} />);
 
+    // First self sign-in with authenticated identity (dept-1)
     fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
-    fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明' } });
+    expect(screen.getByText('王小明')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
     expect(screen.getByText('已完成簽到（準時）')).toBeInTheDocument();
 
+    // Second sign-in for same name but different department - use proxy mode
+    fireEvent.mouseDown(screen.getByLabelText('簽到方式'));
+    fireEvent.click(screen.getByRole('option', { name: '代簽' }));
     fireEvent.mouseDown(screen.getByLabelText('簽到部門'));
     fireEvent.click(screen.getByRole('option', { name: '研發部' }));
     fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明' } });
+    fireEvent.change(screen.getByLabelText('代簽者'), { target: { value: '代理簽到' } });
+    fireEvent.change(screen.getByLabelText('代簽原因'), { target: { value: '不同部門同人名' } });
     fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
 
     expect(screen.getByText('已簽到 2 人')).toBeInTheDocument();
     expect(screen.queryByText('此人員已存在主簽到紀錄，請改用更正流程')).not.toBeInTheDocument();
+  });
+
+  // === Task 4.1: Self sign-in uses authenticated identity ===
+  it('shows read-only identity confirmation for self sign-in from cover', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T13:30:00.000Z'));
+
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 100 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v100 (已鎖定)';
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    // Set authenticated identity for self sign-in
+    project.authenticatedIdentity = {
+      memberId: 'member-auth-001',
+      memberName: '授權使用者',
+      departmentId: 'dept-1',
+    };
+
+    render(<PresentationPage project={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
+
+    // Self sign-in should show read-only identity confirmation, not editable fields
+    expect(screen.getByText('授權使用者')).toBeInTheDocument();
+    expect(screen.getByText('業務部')).toBeInTheDocument();
+    // Should NOT show editable name field for self sign-in
+    expect(screen.queryByLabelText('簽到姓名')).not.toBeInTheDocument();
+  });
+
+  it('registers self attendance record from authenticated identity', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T13:30:00.000Z'));
+
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 101 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v101 (已鎖定)';
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    project.authenticatedIdentity = {
+      memberId: 'member-auth-002',
+      memberName: '測試使用者',
+      departmentId: 'dept-2',
+    };
+
+    render(<PresentationPage project={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
+    fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
+
+    // Should use authenticated identity for the record
+    expect(screen.getByText('已完成簽到（準時）')).toBeInTheDocument();
+    expect(screen.getByText(/最近簽到：測試使用者/)).toBeInTheDocument();
+    expect(screen.getByText(/部門：研發部｜時間：/)).toBeInTheDocument();
+  });
+
+  // === Task 4.1: Missing identity context blocks self sign-in ===
+  it('blocks self sign-in when authenticated identity is incomplete', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T13:30:00.000Z'));
+
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 102 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v102 (已鎖定)';
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    // No authenticated identity set - should block self sign-in
+    project.authenticatedIdentity = undefined;
+
+    render(<PresentationPage project={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
+
+    // Should show blocking message
+    expect(screen.getByText(/無法取得您的身份資訊/)).toBeInTheDocument();
+    // Confirm button should be disabled for self sign-in
+    expect(screen.getByRole('button', { name: '確認簽到' })).toBeDisabled();
+  });
+
+  // === Task 4.2: Management sign-in modes preserve target and audit inputs ===
+  it('proxy sign-in shows editable fields and requires explicit target and audit reason', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T13:30:00.000Z'));
+
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 200 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v200 (已鎖定)';
+    project.attendance.signInOpenedAt = '2026-03-25T13:30:00.000Z';
+    // Even with authenticated identity, proxy sign-in should use editable fields
+    project.authenticatedIdentity = {
+      memberId: 'member-auth-proxy',
+      memberName: '授權使用者',
+      departmentId: 'dept-1',
+    };
+
+    render(<PresentationPage project={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
+    fireEvent.mouseDown(screen.getByLabelText('簽到方式'));
+    fireEvent.click(screen.getByRole('option', { name: '代簽' }));
+
+    // Proxy mode should show editable name and department fields, not read-only
+    expect(screen.getByLabelText('簽到姓名')).toBeInTheDocument();
+    expect(screen.getByLabelText('簽到部門')).toBeInTheDocument();
+    expect(screen.getByLabelText('代簽者')).toBeInTheDocument();
+    expect(screen.getByLabelText('代簽原因')).toBeInTheDocument();
+
+    // Should require all proxy fields
+    fireEvent.change(screen.getByLabelText('簽到姓名'), { target: { value: '王小明' } });
+    fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
+    expect(screen.getByText('代簽需填寫代簽者與原因')).toBeInTheDocument();
+  });
+
+  it('correction mode shows editable fields and does not reuse self sign-in identity confirmation', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T13:35:00.000Z'));
+
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 201 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v201 (已鎖定)';
+    project.attendance.signInOpenedAt = '2026-03-25T13:00:00.000Z';
+    project.authenticatedIdentity = {
+      memberId: 'member-auth-corr',
+      memberName: '授權使用者',
+      departmentId: 'dept-1',
+    };
+
+    // Pre-create a record to correct
+    const session = project.attendance.sessions[0];
+    if (session) {
+      session.records.push({
+        id: 'record-to-correct',
+        sessionId: session.id,
+        memberId: 'member-original',
+        departmentId: 'dept-1',
+        memberName: '原始簽到者',
+        signedAt: '2026-03-25T13:10:00.000Z',
+        status: 'on_time',
+        actorRole: 'department_user',
+        actorName: '原始簽到者',
+        mode: 'self',
+      });
+    }
+
+    render(<PresentationPage project={project} />);
+
+    // First do self sign-in
+    fireEvent.click(screen.getByRole('button', { name: '我要簽到' }));
+    fireEvent.click(screen.getByRole('button', { name: '確認簽到' }));
+    expect(screen.getByText('已完成簽到（準時）')).toBeInTheDocument();
+
+    // Now switch to correction mode
+    fireEvent.mouseDown(screen.getByLabelText('簽到方式'));
+    fireEvent.click(screen.getByRole('option', { name: '更正' }));
+
+    // Correction mode should show editable fields, not read-only identity confirmation
+    expect(screen.getByLabelText('更正目標')).toBeInTheDocument();
+    expect(screen.getByLabelText('簽到姓名')).toBeInTheDocument();
+    expect(screen.getByLabelText('更正原因')).toBeInTheDocument();
+    // Should NOT show read-only identity confirmation block
+    expect(screen.queryByText('請確認以下身份資訊')).not.toBeInTheDocument();
+  });
+
+  it('backfill mode shows editable fields after sign-in closes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T15:00:00.000Z'));
+
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 202 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v202 (已鎖定)';
+    project.attendance.signInOpenedAt = '2026-03-25T13:00:00.000Z';
+    project.attendance.signInClosedAt = '2026-03-25T14:00:00.000Z';
+    project.authenticatedIdentity = {
+      memberId: 'member-auth-backfill',
+      memberName: '授權使用者',
+      departmentId: 'dept-1',
+    };
+
+    render(<PresentationPage project={project} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '補簽/更正' }));
+    fireEvent.mouseDown(screen.getByLabelText('簽到方式'));
+    fireEvent.click(screen.getByRole('option', { name: '補簽' }));
+
+    // Backfill mode should show editable fields, not read-only identity confirmation
+    expect(screen.getByLabelText('簽到姓名')).toBeInTheDocument();
+    expect(screen.getByLabelText('簽到部門')).toBeInTheDocument();
+    expect(screen.getByLabelText('補簽原因')).toBeInTheDocument();
+    // Should NOT show read-only identity confirmation block
+    expect(screen.queryByText('請確認以下身份資訊')).not.toBeInTheDocument();
   });
 
   it('allows backfill after close and marks overdue when beyond 24 hours', () => {

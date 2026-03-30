@@ -145,6 +145,17 @@ export interface PresentationSettings {
   summaryLines: number;
 }
 
+/**
+ * Authenticated identity derived from login context for self sign-in.
+ * When present, self sign-in uses these values instead of manual input.
+ * When absent or incomplete, self sign-in is blocked.
+ */
+export interface AuthenticatedIdentity {
+  memberId: string;
+  memberName: string;
+  departmentId: string;
+}
+
 export interface ReportWorkspaceProject {
   id: string;
   projectName: string;
@@ -163,6 +174,7 @@ export interface ReportWorkspaceProject {
   meetingLock: ProjectMeetingLockConfig;
   lockAuditEvents: LockAuditEvent[];
   attendance: AttendanceState;
+  authenticatedIdentity?: AuthenticatedIdentity;
 }
 
 export interface ReportWorkspaceState {

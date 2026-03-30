@@ -267,6 +267,11 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     latestAttendanceRecord?.departmentId ??
     '--';
 
+  // Authenticated identity from project context for self sign-in.
+  // When present, self sign-in uses these values instead of manual input.
+  const authenticatedIdentity = resolvedProject.authenticatedIdentity;
+  const isSelfSignInBlocked = signInMode === 'self' && !authenticatedIdentity;
+
   // 依當前簽到狀態初始化對話框，並開啟簽到 / 補簽 / 更正入口。
   const openSignInDialog = () => {
     setSignInMode(isSignInClosed ? 'backfill' : 'self');
@@ -288,9 +293,19 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
 
   // 驗證並寫入簽到 ledger，處理一般簽到、代簽、補簽與更正流程。
   const handleConfirmSignIn = () => {
-    const name = signInName.trim();
+    // For self sign-in, use authenticated identity
+    const name = signInMode === 'self' && authenticatedIdentity
+      ? authenticatedIdentity.memberName
+      : signInName.trim();
     const actorName = signInActorName.trim();
     const reason = signInReason.trim();
+    
+    // Block self sign-in if authenticated identity is missing
+    if (signInMode === 'self' && !authenticatedIdentity) {
+      setSignInFeedback('無法取得您的身份資訊，請確認已登入系統');
+      return;
+    }
+
     if (!name) {
       setSignInFeedback('請輸入簽到姓名');
       return;
@@ -319,7 +334,15 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     const meetingStartMs = Date.parse(resolvedProject.presentation.cover.meetingDateTime);
     const nowIsoString = new Date().toISOString();
     const status = Number.isFinite(meetingStartMs) && Date.now() > meetingStartMs ? 'late' : 'on_time';
-    const memberId = resolveMemberId(signInDepartmentId, name);
+    
+    // For self sign-in, use authenticated identity; otherwise use manual input
+    const departmentId = signInMode === 'self' && authenticatedIdentity
+      ? authenticatedIdentity.departmentId
+      : signInDepartmentId;
+    const memberId = signInMode === 'self' && authenticatedIdentity
+      ? authenticatedIdentity.memberId
+      : resolveMemberId(signInDepartmentId, name);
+    
     const activePrimaryRecord = activeAttendanceSession.records.find((record) => record.memberId === memberId && !record.voidedAt);
     const correctionTargetRecord = activeAttendanceSession.records.find(
       (record) => record.id === signInCorrectionTargetId && !record.voidedAt
@@ -371,7 +394,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
                 id: `attendance-${Date.now()}`,
                 sessionId: session.id,
                 memberId,
-                departmentId: signInDepartmentId,
+                departmentId,
                 memberName: name,
                 signedAt: nowIsoString,
                 status,
@@ -526,8 +549,38 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
         </Box>
 
         <Dialog open={signInDialogOpen} onClose={() => setSignInDialogOpen(false)} maxWidth="xs" fullWidth>
-          <DialogTitle>{isSignInClosed ? '補簽/更正' : '手動簽到'}</DialogTitle>
+          <DialogTitle>
+            {signInMode === 'self' && authenticatedIdentity
+              ? '身份確認'
+              : isSignInClosed
+                ? '補簽/更正'
+                : '手動簽到'}
+          </DialogTitle>
           <DialogContent>
+            {/* Self sign-in with authenticated identity - show read-only confirmation */}
+            {signInMode === 'self' && authenticatedIdentity && (
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  請確認以下身份資訊：
+                </Typography>
+                <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    {authenticatedIdentity.memberName}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {departments.find((d) => d.id === authenticatedIdentity.departmentId)?.name ?? authenticatedIdentity.departmentId}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {/* Self sign-in without authenticated identity - show blocking message */}
+            {signInMode === 'self' && !authenticatedIdentity && (
+              <Alert severity="warning" sx={{ mt: 1, mb: 2 }}>
+                無法取得您的身份資訊，請確認已登入系統或聯繫管理員協助。
+              </Alert>
+            )}
+
             <TextField
               margin="dense"
               size="small"
@@ -570,29 +623,34 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
                 })}
               </TextField>
             )}
-            <TextField
-              margin="dense"
-              size="small"
-              select
-              label="簽到部門"
-              value={signInDepartmentId}
-              onChange={(event) => setSignInDepartmentId(event.target.value)}
-              fullWidth
-            >
-              {departments.map((department) => (
-                <MenuItem key={department.id} value={department.id}>
-                  {department.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              margin="dense"
-              size="small"
-              label="簽到姓名"
-              value={signInName}
-              onChange={(event) => setSignInName(event.target.value)}
-              fullWidth
-            />
+            {/* Only show editable department and name fields for management modes */}
+            {signInMode !== 'self' && (
+              <>
+                <TextField
+                  margin="dense"
+                  size="small"
+                  select
+                  label="簽到部門"
+                  value={signInDepartmentId}
+                  onChange={(event) => setSignInDepartmentId(event.target.value)}
+                  fullWidth
+                >
+                  {departments.map((department) => (
+                    <MenuItem key={department.id} value={department.id}>
+                      {department.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  margin="dense"
+                  size="small"
+                  label="簽到姓名"
+                  value={signInName}
+                  onChange={(event) => setSignInName(event.target.value)}
+                  fullWidth
+                />
+              </>
+            )}
             {signInMode === 'proxy' && (
               <TextField
                 margin="dense"
@@ -624,7 +682,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setSignInDialogOpen(false)}>關閉</Button>
-            <Button variant="contained" onClick={handleConfirmSignIn}>
+            <Button variant="contained" onClick={handleConfirmSignIn} disabled={isSelfSignInBlocked}>
               確認簽到
             </Button>
           </DialogActions>
