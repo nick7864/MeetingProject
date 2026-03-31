@@ -589,60 +589,36 @@ tests:
 ---
 ### Requirement: Cover includes attendee sign-in call-to-action
 
-The cover SHALL include a clear attendee sign-in call-to-action that integrates with attendance workflows.
+The cover SHALL include a clear attendee sign-in call-to-action that integrates with attendance workflows and SHALL open the authenticated self sign-in confirmation flow for normal attendee sign-in.
 
 #### Scenario: View cover before report starts
 
 - **WHEN** cover is displayed before report body start
 - **THEN** attendees can discover and trigger sign-in from cover without navigating to admin tabs
 
+#### Scenario: Open normal sign-in from cover
+
+- **WHEN** an authenticated attendee triggers normal sign-in from the cover
+- **THEN** the dialog shows a read-only identity confirmation flow instead of manual department and name input fields
+
 
 <!-- @trace
-source: add-meeting-presentation-controls
-updated: 2026-03-25
+source: auto-derive-self-signin-identity
+updated: 2026-03-30
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/mock/reportWorkspaceData.ts
+  - session-ses_2c35.md
+  - src/assets/images/cover-sample.jpg
+  - src/types/reportWorkspace.ts
+  - src/styles/meetingSurface.ts
+  - .docs/attendance-logic-notes.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/End.jpg
+  - nul
 tests:
   - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
@@ -796,27 +772,28 @@ tests:
 ---
 ### Requirement: Text content uses configurable summary lines with expansion
 
-The system SHALL truncate long report text to a globally configured summary line count in presentation mode and SHALL provide an expand action to show full text, while keeping a consistent field-heading hierarchy before and after expansion.
+The system SHALL truncate long report text to a globally configured summary line count in presentation mode and SHALL provide an expand action to show full text, while preserving supported lightweight emphasis styles for the three narrative report fields.
 
 #### Scenario: Render long text with default summary
 
-- **WHEN** summary line configuration is set to 4 and a field exceeds 4 lines
-- **THEN** the view shows a 4-line summary with an explicit expand control for full content and keeps the same field-heading hierarchy in both summary and expanded states
+- **WHEN** summary line configuration is set to 4 and a supported narrative field exceeds 4 lines
+- **THEN** the view shows a 4-line summary with an explicit expand control for full content and keeps the allowed emphasis styling in both summary and expanded states
 
 
 <!-- @trace
-source: strengthen-presentation-field-heading-hierarchy
-updated: 2026-03-27
+source: lightweight-report-text-emphasis
+updated: 2026-03-30
 code:
-  - nul
-  - src/mock/reportWorkspaceData.ts
-  - src/assets/images/cover-sample.jpg
-  - .docs/attendance-logic-notes.md
-  - src/components/PresentationPage/PresentationPage.tsx
-  - src/assets/images/End.jpg
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - session-ses_2c35.md
   - src/styles/meetingSurface.ts
   - src/types/reportWorkspace.ts
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/End.jpg
+  - nul
+  - .docs/attendance-logic-notes.md
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/cover-sample.jpg
 tests:
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
   - src/components/PresentationPage/PresentationPage.test.tsx
@@ -1302,6 +1279,74 @@ code:
   - src/components/ReportWorkspace/ReportWorkspace.tsx
   - src/styles/meetingSurface.ts
   - src/types/reportWorkspace.ts
+tests:
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+  - src/components/PresentationPage/PresentationPage.test.tsx
+-->
+
+---
+### Requirement: Cover sign-in dialog distinguishes self and management workflows
+
+The presentation sign-in dialog SHALL present a simplified self sign-in flow for authenticated attendees and SHALL present workflow-specific inputs for proxy sign-in, correction, and backfill actions.
+
+#### Scenario: Authenticated attendee opens self sign-in dialog
+
+- **WHEN** the dialog opens in normal self sign-in mode
+- **THEN** the attendee sees identity confirmation content and the minimum actions needed to confirm sign-in
+
+#### Scenario: Operator switches to management workflow in sign-in dialog
+
+- **WHEN** the dialog is opened for proxy sign-in, correction, or backfill
+- **THEN** the dialog renders the workflow-specific target and audit inputs required by that management action
+
+<!-- @trace
+source: auto-derive-self-signin-identity
+updated: 2026-03-30
+code:
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/mock/reportWorkspaceData.ts
+  - session-ses_2c35.md
+  - src/assets/images/cover-sample.jpg
+  - src/types/reportWorkspace.ts
+  - src/styles/meetingSurface.ts
+  - .docs/attendance-logic-notes.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/End.jpg
+  - nul
+tests:
+  - src/components/PresentationPage/PresentationPage.test.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+-->
+
+---
+### Requirement: Presentation renders lightweight text emphasis for supported narrative fields
+
+The presentation view SHALL render bold, text color, emphasis font size, and preserved line breaks for `weeklyStatusAndRisk`, `supportPlan`, and `executiveDiscussion` when those fields contain lightweight text emphasis content.
+
+#### Scenario: Render emphasized narrative field in meeting presentation
+
+- **WHEN** a locked presentation snapshot contains supported narrative field content with lightweight text emphasis
+- **THEN** the presentation view shows the stored emphasis styles for that field instead of flattening it to plain text
+
+#### Scenario: Render unsupported plain text field in meeting presentation
+
+- **WHEN** the presentation view renders `workItem`, `plannedBuildDate`, or `approvalDate`
+- **THEN** the view keeps those fields in plain text presentation without lightweight emphasis formatting controls or rendering metadata
+
+<!-- @trace
+source: lightweight-report-text-emphasis
+updated: 2026-03-30
+code:
+  - session-ses_2c35.md
+  - src/styles/meetingSurface.ts
+  - src/types/reportWorkspace.ts
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/End.jpg
+  - nul
+  - .docs/attendance-logic-notes.md
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/cover-sample.jpg
 tests:
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
   - src/components/PresentationPage/PresentationPage.test.tsx

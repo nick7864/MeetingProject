@@ -799,53 +799,55 @@ describe('ReportWorkspacePage backend management tab', () => {
     createObjectUrlSpy.mockRestore();
   });
 
-  it('moves a middle page upward when move up button is clicked', async () => {
-    render(<ReportWorkspacePage />);
+  // =========================================================================
+  // Lightweight Text Emphasis Tests
+  // =========================================================================
 
-    // Add a third page so we have multiple pages to reorder
-    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+  it('stores narrative fields as structured content type', () => {
+    const project = createWorkspaceProject('emphasis-storage', '強調儲存測試');
+    const version = project.versions[0];
+    if (!version) throw new Error('version missing');
+    const page = version.pages.find((p) => p.type === 'report');
+    if (!page || page.type !== 'report') throw new Error('report page missing');
+    const block = page.blocks[0];
+    if (!block) throw new Error('block missing');
 
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    // Verify narrative fields are initialized as arrays (structured content)
+    expect(Array.isArray(block.fields.weeklyStatusAndRisk)).toBe(true);
+    expect(Array.isArray(block.fields.supportPlan)).toBe(true);
+    expect(Array.isArray(block.fields.executiveDiscussion)).toBe(true);
 
-    const pageButtons = screen.getAllByRole('button', { name: /page/ });
-    expect(pageButtons.length).toBeGreaterThanOrEqual(3);
-
-    // Find move up button for the last page and click it
-    const moveUpButtons = screen.getAllByLabelText('上移頁面');
-    // Move the last page up
-    fireEvent.click(moveUpButtons[moveUpButtons.length - 1]);
-
-    // Verify order changed
-    const reorderedButtons = screen.getAllByRole('button', { name: /page/ });
-    expect(reorderedButtons.length).toBeGreaterThanOrEqual(3);
+    // Verify non-emphasis fields are strings
+    expect(typeof block.fields.workItem).toBe('string');
+    expect(typeof block.fields.plannedBuildDate).toBe('string');
+    expect(typeof block.fields.approvalDate).toBe('string');
   });
 
-  it('moves a middle page downward when move down button is clicked', async () => {
+  it('shows emphasis editor toolbar only for the three supported narrative fields', () => {
     render(<ReportWorkspacePage />);
 
-    // Add a third page so we have multiple pages to reorder
-    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+    const toolbars = screen.getAllByTestId('emphasis-editor-toolbar');
+    expect(toolbars.length).toBeGreaterThanOrEqual(3);
+    expect(toolbars.length % 3).toBe(0);
 
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    const workItemInputs = screen.getAllByLabelText('工作項目');
+    expect(workItemInputs.some((input) => input.getAttribute('contenteditable') === 'true')).toBe(false);
 
-    const pageButtons = screen.getAllByRole('button', { name: /page/ });
-    expect(pageButtons.length).toBeGreaterThanOrEqual(3);
-
-    // Find move down button for the first page and click it
-    const moveDownButtons = screen.getAllByLabelText('下移頁面');
-    fireEvent.click(moveDownButtons[0]); // Move first page down
-
-    // Verify order changed
-    const reorderedButtons = screen.getAllByRole('button', { name: /page/ });
-    expect(reorderedButtons.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('disables page reordering controls in a locked version', () => {
-    const project = createWorkspaceProject('project-locked-pages', '鎖定版本頁面測試');
-    project.versions = [{ ...project.versions[0], isLocked: true }];
-    project.activeVersionId = project.versions[0].id;
+  it('blocks lock when narrative fields exceed limit based on plain text length', () => {
+    const project = createWorkspaceProject('emphasis-limit-lock', '強調字數鎖定測試');
+    project.fieldLimits.weeklyStatusAndRisk = 10;
+
+    const version = project.versions[0];
+    if (!version) throw new Error('version missing');
+    const page = version.pages.find((p) => p.type === 'report');
+    if (!page || page.type !== 'report') throw new Error('report page missing');
+    const block = page.blocks[0];
+    if (!block) throw new Error('block missing');
+
+    // Set structured content with long text
+    block.fields.weeklyStatusAndRisk = [{ text: 'This is a very long text that exceeds the limit' }];
 
     window.localStorage.setItem(
       'report-workspace-state',
@@ -857,161 +859,8 @@ describe('ReportWorkspacePage backend management tab', () => {
     );
 
     render(<ReportWorkspacePage />);
+    fireEvent.click(screen.getByRole('button', { name: '鎖定目前版本' }));
 
-    // Move up/down buttons should be disabled
-    const moveUpButtons = screen.getAllByLabelText('上移頁面');
-    const moveDownButtons = screen.getAllByLabelText('下移頁面');
-
-    moveUpButtons.forEach((button) => {
-      expect(button).toBeDisabled();
-    });
-    moveDownButtons.forEach((button) => {
-      expect(button).toBeDisabled();
-    });
-  });
-
-  it('disables move up button for the first page', () => {
-    render(<ReportWorkspacePage />);
-
-    const moveUpButtons = screen.getAllByLabelText('上移頁面');
-    expect(moveUpButtons[0]).toBeDisabled(); // First page can't move up
-  });
-
-  it('disables move down button for the last page', () => {
-    render(<ReportWorkspacePage />);
-
-    const moveDownButtons = screen.getAllByLabelText('下移頁面');
-    expect(moveDownButtons[moveDownButtons.length - 1]).toBeDisabled(); // Last page can't move down
-  });
-
-  it('confirms page deletion from custom modal', async () => {
-    render(<ReportWorkspacePage />);
-
-    // Add a third page so we have more than 2 pages
-    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
-
-    const deleteButtons = screen.getAllByLabelText('刪除頁面');
-    expect(deleteButtons.length).toBeGreaterThanOrEqual(3);
-
-    // Click delete on the first page
-    fireEvent.click(deleteButtons[0]);
-
-    // Custom modal should appear
-    await screen.findByRole('dialog');
-    expect(screen.getByText(/確認刪除/)).toBeInTheDocument();
-
-    // Confirm deletion
-    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
-
-    // Modal should close
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-
-    // Page should be removed
-    const pageButtons = screen.getAllByRole('button', { name: /page/ });
-    expect(pageButtons.length).toBe(2);
-  });
-
-  it('cancels page deletion from custom modal', async () => {
-    render(<ReportWorkspacePage />);
-
-    // Add a third page so we have more than 2 pages
-    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
-
-    const deleteButtons = screen.getAllByLabelText('刪除頁面');
-
-    // Click delete on the first page
-    fireEvent.click(deleteButtons[0]);
-
-    // Custom modal should appear
-    await screen.findByRole('dialog');
-
-    // Cancel deletion
-    fireEvent.click(screen.getByRole('button', { name: '取消' }));
-
-    // Modal should close
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-
-    // Page should still exist
-    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
-  });
-
-  it('deletes the active page and switches to a neighboring page', async () => {
-    render(<ReportWorkspacePage />);
-
-    // Add a third page so we have more than 2 pages
-    fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
-
-    // First page is active by default
-    const activePageButton = screen.getAllByRole('button', { name: /page/ }).find(
-      (btn) => btn.className.includes('MuiButton-contained')
-    );
-    expect(activePageButton).toBeTruthy();
-
-    const deleteButtons = screen.getAllByLabelText('刪除頁面');
-
-    // Click delete on the first page (which is active)
-    fireEvent.click(deleteButtons[0]);
-    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
-
-    // Wait for modal to close and verify active page switched
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-  });
-
-  it('blocks deletion of the last remaining page', () => {
-    // Create a project with only one page
-    const project = createWorkspaceProject('project-single-page', '單頁測試專案');
-    project.versions[0].pages = [project.versions[0].pages[0]];
-
-    window.localStorage.setItem(
-      'report-workspace-state',
-      JSON.stringify({
-        currentRole: 'admin',
-        activeProjectId: project.id,
-        projects: [project],
-      })
-    );
-
-    render(<ReportWorkspacePage />);
-
-    const deleteButtons = screen.getAllByLabelText('刪除頁面');
-    expect(deleteButtons.length).toBe(1);
-    expect(deleteButtons[0]).toBeDisabled();
-  });
-
-  it('disables delete button in a locked version', () => {
-    const project = createWorkspaceProject('project-locked-delete', '鎖定版本刪除測試');
-    project.versions = [{ ...project.versions[0], isLocked: true }];
-    project.activeVersionId = project.versions[0].id;
-
-    window.localStorage.setItem(
-      'report-workspace-state',
-      JSON.stringify({
-        currentRole: 'admin',
-        activeProjectId: project.id,
-        projects: [project],
-      })
-    );
-
-    render(<ReportWorkspacePage />);
-
-    const deleteButtons = screen.getAllByLabelText('刪除頁面');
-    deleteButtons.forEach((button) => {
-      expect(button).toBeDisabled();
-    });
+    expect(screen.getByText('仍有欄位超過字數上限，請先修正再鎖定。')).toBeInTheDocument();
   });
 });

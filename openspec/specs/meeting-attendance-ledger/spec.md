@@ -397,60 +397,31 @@ tests:
 ---
 ### Requirement: Manual sign-in mode for first release
 
-The first release SHALL support manual sign-in operated through name, department, and confirmation inputs.
+The first release SHALL support self sign-in operated through authenticated identity confirmation instead of manual name and department entry.
 
-#### Scenario: Register manual attendance record
+#### Scenario: Register self attendance record from authenticated identity
 
-- **WHEN** an operator completes manual sign-in fields and confirms
-- **THEN** the system stores the participant attendance record for the target session
+- **WHEN** an authenticated attendee opens normal sign-in and confirms the action
+- **THEN** the system stores the attendance record for the target session using the attendee's system-provided member identity, name, and department
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
-updated: 2026-03-25
+source: auto-derive-self-signin-identity
+updated: 2026-03-30
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
-  - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/mock/reportWorkspaceData.ts
+  - session-ses_2c35.md
+  - src/assets/images/cover-sample.jpg
+  - src/types/reportWorkspace.ts
+  - src/styles/meetingSurface.ts
+  - .docs/attendance-logic-notes.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/End.jpg
+  - nul
 tests:
   - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
 -->
 
 ---
@@ -1394,4 +1365,68 @@ tests:
   - src/test/setup.ts
   - src/App.test.tsx
   - src/test/smoke.test.ts
+-->
+
+---
+### Requirement: Self sign-in blocks when authenticated identity is incomplete
+
+The system SHALL block normal self sign-in when the authenticated meeting context does not provide a unique member identity, member name, and department.
+
+#### Scenario: Missing identity context during self sign-in
+
+- **WHEN** an attendee opens normal sign-in but the system cannot resolve the required authenticated identity fields
+- **THEN** the system blocks sign-in submission and shows guidance that identity information is unavailable
+
+
+<!-- @trace
+source: auto-derive-self-signin-identity
+updated: 2026-03-30
+code:
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/mock/reportWorkspaceData.ts
+  - session-ses_2c35.md
+  - src/assets/images/cover-sample.jpg
+  - src/types/reportWorkspace.ts
+  - src/styles/meetingSurface.ts
+  - .docs/attendance-logic-notes.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/End.jpg
+  - nul
+tests:
+  - src/components/PresentationPage/PresentationPage.test.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
+-->
+
+---
+### Requirement: Management sign-in modes preserve target selection and audit inputs
+
+The system SHALL keep proxy sign-in, correction, and backfill workflows separate from normal self sign-in and SHALL require the target record or target attendee plus required reason fields for those management actions.
+
+#### Scenario: Proxy sign-in still requires explicit target and audit reason
+
+- **WHEN** an operator performs proxy sign-in for another attendee
+- **THEN** the system requires the operator to identify the target attendee and provide the proxy audit inputs before creating the record
+
+#### Scenario: Correction or backfill does not reuse self sign-in identity confirmation flow
+
+- **WHEN** an operator opens correction or backfill flow after sign-in has started or closed
+- **THEN** the system presents the workflow-specific target selection and reason inputs instead of the normal self sign-in identity confirmation view
+
+<!-- @trace
+source: auto-derive-self-signin-identity
+updated: 2026-03-30
+code:
+  - src/components/PresentationPage/PresentationPage.tsx
+  - src/mock/reportWorkspaceData.ts
+  - session-ses_2c35.md
+  - src/assets/images/cover-sample.jpg
+  - src/types/reportWorkspace.ts
+  - src/styles/meetingSurface.ts
+  - .docs/attendance-logic-notes.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/End.jpg
+  - nul
+tests:
+  - src/components/PresentationPage/PresentationPage.test.tsx
+  - src/components/ReportWorkspace/ReportWorkspace.test.tsx
 -->

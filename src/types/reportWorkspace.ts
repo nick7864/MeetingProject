@@ -9,13 +9,57 @@ export interface WorkspaceDepartment {
   active: boolean;
 }
 
+// ============================================================================
+// Lightweight Text Emphasis Types
+// ============================================================================
+
+/**
+ * Supported emphasis styles for narrative report fields.
+ * Limited to four formatting behaviors in first release:
+ * - bold: 粗體
+ * - color: 換色 (primary color)
+ * - larger: 強調字級 (increased font size)
+ * - preserveNewline: 換行保留
+ */
+export interface TextEmphasis {
+  bold?: boolean;
+  color?: 'primary' | 'secondary' | 'error' | 'warning' | 'success';
+  larger?: boolean;
+  preserveNewline?: boolean;
+}
+
+/**
+ * A text segment with optional emphasis styling.
+ * Plain text segments have no emphasis (empty object or undefined).
+ */
+export interface TextSegment {
+  text: string;
+  emphasis?: TextEmphasis;
+}
+
+/**
+ * Content that supports lightweight text emphasis.
+ * - Legacy/plain content: string (backward compatible)
+ * - Structured content: TextSegment[] (new emphasis-capable format)
+ */
+export type EmphasisCapableContent = string | TextSegment[];
+
+/**
+ * Names of the three narrative fields that support lightweight text emphasis.
+ */
+export type EmphasisSupportedField = 'weeklyStatusAndRisk' | 'supportPlan' | 'executiveDiscussion';
+
+/**
+ * Report field values where the three narrative fields support emphasis,
+ * while other fields remain plain strings.
+ */
 export interface ReportFields {
   workItem: string;
   plannedBuildDate: string;
   approvalDate: string;
-  weeklyStatusAndRisk: string;
-  supportPlan: string;
-  executiveDiscussion: string;
+  weeklyStatusAndRisk: EmphasisCapableContent;
+  supportPlan: EmphasisCapableContent;
+  executiveDiscussion: EmphasisCapableContent;
 }
 
 export type ReportFieldLimits = Record<keyof ReportFields, number>;

@@ -185,60 +185,31 @@ tests:
 ---
 ### Requirement: Real-time character count feedback
 
-The system SHALL display current character count and maximum allowed count while users edit report fields.
+The system SHALL display current character count and maximum allowed count while users edit report fields, and SHALL compute the count from plain text content even when a supported field stores lightweight text emphasis metadata.
 
 #### Scenario: User edits long status content
 
 - **WHEN** a user updates a report field
-- **THEN** the UI shows live count in the format of current length over max length
+- **THEN** the UI shows live count in the format of current plain-text length over max length
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
-updated: 2026-03-25
+source: lightweight-report-text-emphasis
+updated: 2026-03-30
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
+  - session-ses_2c35.md
   - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
+  - src/types/reportWorkspace.ts
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/End.jpg
+  - nul
+  - .docs/attendance-logic-notes.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/cover-sample.jpg
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
 -->
 
 ---
@@ -303,119 +274,61 @@ tests:
 ---
 ### Requirement: Over-limit paste is truncated with notice
 
-The system SHALL truncate pasted content to the configured field limit and SHALL notify user that paste content was truncated.
+The system SHALL truncate pasted content to the configured field limit and SHALL notify user that paste content was truncated, and truncation for emphasis-capable fields SHALL preserve only the allowed styles that still apply to the retained plain text.
 
 #### Scenario: Paste oversized text
 
 - **WHEN** pasted text length would exceed field limit
-- **THEN** the stored field value is truncated to max length and truncation notice is shown
+- **THEN** the stored field value is truncated to max plain-text length and truncation notice is shown
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
-updated: 2026-03-25
+source: lightweight-report-text-emphasis
+updated: 2026-03-30
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
+  - session-ses_2c35.md
   - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
+  - src/types/reportWorkspace.ts
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/End.jpg
+  - nul
+  - .docs/attendance-logic-notes.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/cover-sample.jpg
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
 -->
 
 ---
 ### Requirement: Character counting includes spaces and newlines
 
-The system SHALL count spaces and newline characters toward field length limits.
+The system SHALL count spaces and newline characters toward field length limits, and SHALL ignore emphasis metadata when computing field length.
 
 #### Scenario: Count multiline text with spaces
 
 - **WHEN** a user enters multiline text containing spaces
-- **THEN** the counter increases for visible characters, spaces, and newline characters
+- **THEN** the counter increases for visible characters, spaces, and newline characters regardless of emphasis styling
 
 
 <!-- @trace
-source: add-meeting-presentation-controls
-updated: 2026-03-25
+source: lightweight-report-text-emphasis
+updated: 2026-03-30
 code:
-  - .opencode/skills/spectra-archive/SKILL.md
-  - package.json
-  - src/constants/reportFieldLimits.ts
-  - .opencode/skills/spectra-apply/SKILL.md
-  - src/mock/reportWorkspaceData.ts
-  - .opencode/commands/spectra-audit.md
-  - .opencode/commands/spectra-apply.md
-  - src/App.tsx
-  - .agents/skills/spectra-archive/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - .opencode/skills/spectra-ingest/SKILL.md
-  - .opencode/commands/spectra-propose.md
-  - .opencode/skills/spectra-debug/SKILL.md
-  - .opencode/commands/spectra-ask.md
-  - .opencode/commands/spectra-archive.md
-  - src/types/reportWorkspace.ts
-  - src/components/PresentationPage/index.ts
-  - .opencode/commands/spectra-ingest.md
-  - .opencode/commands/spectra-discuss.md
-  - AGENTS.md
+  - session-ses_2c35.md
   - src/styles/meetingSurface.ts
-  - .agents/skills/spectra-debug/SKILL.md
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-propose/SKILL.md
-  - vite.config.ts
-  - .opencode/commands/spectra-debug.md
-  - .agents/skills/spectra-discuss/SKILL.md
-  - src/components/ReportWorkspace/ReportWorkspace.tsx
-  - .opencode/skills/spectra-propose/SKILL.md
-  - .opencode/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - .opencode/skills/spectra-discuss/SKILL.md
-  - CLAUDE.md
+  - src/types/reportWorkspace.ts
+  - src/mock/reportWorkspaceData.ts
+  - src/assets/images/End.jpg
+  - nul
+  - .docs/attendance-logic-notes.md
   - src/components/PresentationPage/PresentationPage.tsx
-  - .opencode/skills/spectra-audit/SKILL.md
-  - .agents/skills/spectra-apply/SKILL.md
+  - src/components/ReportWorkspace/ReportWorkspace.tsx
+  - src/assets/images/cover-sample.jpg
 tests:
-  - src/components/PresentationPage/PresentationPage.test.tsx
   - src/components/ReportWorkspace/ReportWorkspace.test.tsx
-  - src/test/setup.ts
-  - src/App.test.tsx
-  - src/test/smoke.test.ts
+  - src/components/PresentationPage/PresentationPage.test.tsx
 -->
 
 ---

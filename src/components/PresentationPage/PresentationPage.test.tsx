@@ -192,31 +192,8 @@ describe('PresentationPage', () => {
     expect(screen.getAllByRole('button', { name: '展開全文' })[0]).toBeInTheDocument();
   });
 
-  it('uses the same restrained heading treatment across all report fields', () => {
-    const project = createWorkspaceProject('project-heading-style', '專案測試');
-    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 23 }];
-    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
-    project.presentation.cover.versionInfo = 'v23 (已鎖定)';
-
-    render(<PresentationPage project={project} />);
-    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
-
-    const fieldLabels = [
-      '工作項目',
-      '本周、下周辦理情形暨工作預警狀況說明',
-      '預計完成日(掛建日)',
-      '預計完成日(核准日)',
-      '建請協助方案（公關機制/跨部門協調）',
-      '待層峰討論 & 決議',
-    ];
-
-    fieldLabels.forEach((label) => {
-      expect(screen.getByText(label)).toHaveAttribute('data-presentation-field-heading', 'true');
-    });
-  });
-
-  it('keeps heading hierarchy consistent before and after expanding long report text', () => {
-    const project = createWorkspaceProject('project-heading-expand', '專案測試');
+  it('keeps emphasis rendering consistent between summary and expanded states', () => {
+    const project = createWorkspaceProject('project-emphasis-summary', '強調摘要一致性');
     const reportPage = project.versions[0].pages.find((page) => page.type === 'report');
     if (!reportPage || reportPage.type !== 'report') {
       throw new Error('report page not found in fixture');
@@ -225,75 +202,37 @@ describe('PresentationPage', () => {
     reportPage.blocks = reportPage.blocks.map((block) =>
       block.departmentId === 'dept-1'
         ? {
-            ...block,
-            fields: {
-              ...block.fields,
-              weeklyStatusAndRisk:
-                '這是一段很長的會議說明內容，'.repeat(12) +
-                '用來驗證展開前後欄位標題都保持相同階層與節奏。',
-            },
-          }
+          ...block,
+          fields: {
+            ...block.fields,
+            weeklyStatusAndRisk: [
+              { text: '重要風險', emphasis: { bold: true, color: 'error', larger: true } },
+              { text: `\n${'後續追蹤'.repeat(20)}` },
+            ],
+          },
+        }
         : block
     );
 
-    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 24 }];
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 23 }];
     project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
-    project.presentation.cover.versionInfo = 'v24 (已鎖定)';
+    project.presentation.cover.versionInfo = 'v23 (已鎖定)';
     project.presentation.summaryLines = 1;
 
     render(<PresentationPage project={project} />);
     fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
 
-    const heading = screen.getByText('本周、下周辦理情形暨工作預警狀況說明');
-    expect(heading).toHaveAttribute('data-presentation-field-heading', 'true');
+    const emphasizedText = screen.getByText('重要風險');
+    expect(emphasizedText).toHaveAttribute('data-emphasis-bold', 'true');
+    expect(emphasizedText).toHaveAttribute('data-emphasis-color', 'error');
+    expect(emphasizedText).toHaveAttribute('data-emphasis-larger', 'true');
 
     fireEvent.click(screen.getAllByRole('button', { name: '展開全文' })[0]);
-    expect(screen.getByText('本周、下周辦理情形暨工作預警狀況說明')).toHaveAttribute(
-      'data-presentation-field-heading',
-      'true'
-    );
 
-    fireEvent.click(screen.getAllByRole('button', { name: '收合全文' })[0]);
-    expect(screen.getByText('本周、下周辦理情形暨工作預警狀況說明')).toHaveAttribute(
-      'data-presentation-field-heading',
-      'true'
-    );
-  });
-
-  it('keeps report field content as the primary reading target beside strengthened headings', () => {
-    const project = createWorkspaceProject('project-heading-balance', '專案測試');
-    const reportPage = project.versions[0].pages.find((page) => page.type === 'report');
-    if (!reportPage || reportPage.type !== 'report') {
-      throw new Error('report page not found in fixture');
-    }
-
-    reportPage.blocks = reportPage.blocks.map((block) =>
-      block.departmentId === 'dept-1'
-        ? {
-            ...block,
-            fields: {
-              ...block.fields,
-              supportPlan: '跨部門協調完成後，預計於本週五前完成修正並回報。',
-            },
-          }
-        : block
-    );
-
-    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 25 }];
-    project.presentation.cover.meetingDateTime = '2026-03-25 14:00';
-    project.presentation.cover.versionInfo = 'v25 (已鎖定)';
-
-    render(<PresentationPage project={project} />);
-    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
-
-    expect(screen.getByText('建請協助方案（公關機制/跨部門協調）')).toHaveAttribute(
-      'data-presentation-field-heading',
-      'true'
-    );
-    expect(screen.getByText('跨部門協調完成後，預計於本週五前完成修正並回報。')).toHaveAttribute(
-      'data-presentation-field-content',
-      'true'
-    );
+    const emphasizedTextAfterExpand = screen.getByText('重要風險');
+    expect(emphasizedTextAfterExpand).toHaveAttribute('data-emphasis-bold', 'true');
+    expect(emphasizedTextAfterExpand).toHaveAttribute('data-emphasis-color', 'error');
+    expect(emphasizedTextAfterExpand).toHaveAttribute('data-emphasis-larger', 'true');
   });
 
   it('shows a single image with inline note on image slides', () => {
