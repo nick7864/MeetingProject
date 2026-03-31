@@ -30,6 +30,7 @@ import {
   meetingSurfaceSx,
 } from '../../styles/meetingSurface';
 import coverBgImg from '../../assets/images/cover.jpg';
+import endBgImg from '../../assets/images/End.jpg';
 
 interface PresentationPageProps {
   project?: ReportWorkspaceProject;
@@ -765,50 +766,76 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
           data-meeting-surface="true"
           elevation={0}
           sx={{
-            p: { xs: 3, md: 6 },
+            p: { xs: 0, md: 4 },
+            overflow: 'hidden',
             ...meetingSurfaceSx,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '50vh',
-            textAlign: 'center',
           }}
         >
-          <Typography
-            variant="h2"
+          <Box
             sx={{
-              fontWeight: 800,
-              mb: 2,
-              fontSize: `${2.5 * fontScale}rem`,
+              position: 'relative',
+              width: '100%',
+              maxWidth: '1080px',
+              mx: 'auto',
+              borderRadius: { xs: 0, md: 2 },
+              boxShadow: { xs: 'none', md: '0 12px 32px rgba(0,0,0,0.15)' },
+              overflow: 'hidden',
+              aspectRatio: '16/9',
+              backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.52)), url(${endBgImg})`,
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              backgroundSize: 'cover',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              textAlign: 'center',
+              color: '#fff',
+              px: { xs: 3, md: 8 },
+              py: { xs: 5, md: 8 },
             }}
           >
-            {endSlideTitle}
-          </Typography>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 600,
-              mb: endSlideSupportingText ? 3 : 0,
-              fontSize: `${1.5 * fontScale}rem`,
-              color: 'text.secondary',
-            }}
-          >
-            {endSlideSubtitle}
-          </Typography>
-          {endSlideSupportingText && (
             <Typography
-              variant="body1"
+              variant="h2"
               sx={{
-                fontSize: `${1.1 * fontScale}rem`,
-                lineHeight: 1.8,
-                whiteSpace: 'pre-wrap',
-                maxWidth: 600,
+                fontWeight: 800,
+                mb: 2,
+                fontSize: `${2.6 * fontScale}rem`,
+                textShadow: '0 2px 10px rgba(0,0,0,0.35)',
               }}
             >
-              {endSlideSupportingText}
+              {endSlideTitle}
             </Typography>
-          )}
+
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 600,
+                mb: endSlideSupportingText ? 3 : 0,
+                fontSize: `${1.55 * fontScale}rem`,
+                color: 'rgba(255, 255, 255, 0.9)',
+                textShadow: '0 2px 8px rgba(0,0,0,0.28)',
+              }}
+            >
+              {endSlideSubtitle}
+            </Typography>
+
+            {endSlideSupportingText && (
+              <Typography
+                variant="body1"
+                sx={{
+                  fontSize: `${1.1 * fontScale}rem`,
+                  lineHeight: 1.8,
+                  whiteSpace: 'pre-wrap',
+                  maxWidth: 640,
+                  color: 'rgba(255, 255, 255, 0.92)',
+                  textShadow: '0 1px 4px rgba(0,0,0,0.24)',
+                }}
+              >
+                {endSlideSupportingText}
+              </Typography>
+            )}
+          </Box>
         </Paper>
 
         <Paper data-meeting-surface="true" elevation={0} sx={{ p: 1.5, ...meetingSurfaceSx, position: 'sticky', bottom: 0 }}>
@@ -822,6 +849,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
 
   // 渲染單一報表欄位，包含摘要截斷與展開收合控制。
   const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
+    const safeValue = typeof value === 'string' ? value : '';
     const expansionKey = buildFieldExpansionKey(departmentId, pageId, field);
     const isExpanded = expandedFields[expansionKey] ?? false;
     return (
@@ -848,9 +876,9 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
               }),
           }}
         >
-          {value?.trim() || '（未填寫）'}
+          {safeValue.trim() || '（未填寫）'}
         </Typography>
-        {shouldShowExpand(value) && (
+        {shouldShowExpand(safeValue) && (
           <Button
             variant="text"
             size="small"
