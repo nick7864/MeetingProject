@@ -866,6 +866,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
                 mb: 2,
                 fontSize: `${2.6 * fontScale}rem`,
                 textShadow: '0 2px 10px rgba(0,0,0,0.35)',
+                color: '#fff',
               }}
             >
               {endSlideTitle}

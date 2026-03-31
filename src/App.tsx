@@ -106,7 +106,7 @@ const App: React.FC = () => {
                     borderRadius: 2,
                     py: 1.25,
                     px: isCollapsed ? 1 : 2,
-                    justifyContent: isCollapsed ? 'center' : 'flex-start',
+                    justifyContent: isCollapsed ? 'end' : 'flex-start',
                     '&.Mui-selected': {
                       bgcolor: alpha(theme.palette.primary.main, 0.08),
                       '&:hover': {
@@ -150,7 +150,7 @@ const App: React.FC = () => {
       </Box>
 
       {/* User Area */}
-      <Box sx={{ p: isCollapsed ? 1 : 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
+      <Box sx={{ p: isCollapsed ? 1 : 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: isCollapsed ? 'end' : 'flex-start' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Avatar
             sx={{
