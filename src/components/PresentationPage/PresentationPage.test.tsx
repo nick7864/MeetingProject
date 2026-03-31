@@ -1029,4 +1029,29 @@ describe('PresentationPage', () => {
     const endFooter = screen.getByTestId('presentation-footer');
     expect(endFooter).toHaveTextContent('結束頁');
   });
+
+  it('uses End.jpg on the end slide surface only', () => {
+    const project = createWorkspaceProject('project-test', '專案測試');
+    project.versions = [{ ...project.versions[0], isLocked: true, versionNo: 39 }];
+    project.presentation.cover.meetingDateTime = '2026-03-25T14:00:00.000Z';
+    project.presentation.cover.versionInfo = 'v39 (已鎖定)';
+
+    render(<PresentationPage project={project} />);
+    fireEvent.click(screen.getByRole('button', { name: '開始報告' }));
+
+    const reportFooter = screen.getByTestId('presentation-footer');
+    const totalSlides = parseInt(reportFooter.textContent?.split('/')[1] ?? '0', 10);
+    for (let i = 0; i < totalSlides; i++) {
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+    }
+
+    const endSurface = screen.getByTestId('presentation-end-surface');
+    const endHero = endSurface.firstElementChild as HTMLElement;
+    expect(window.getComputedStyle(endHero).backgroundImage).toContain('End');
+    expect(window.getComputedStyle(endHero).aspectRatio).toBe('16/9');
+
+    fireEvent.click(screen.getByRole('button', { name: '上一張' }));
+
+    expect(screen.queryByTestId('presentation-end-surface')).not.toBeInTheDocument();
+  });
 });

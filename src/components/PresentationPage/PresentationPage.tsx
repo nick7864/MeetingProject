@@ -35,6 +35,7 @@ import {
   meetingSurfaceSx,
 } from '../../styles/meetingSurface';
 import coverBgImg from '../../assets/images/cover.jpg';
+import endBgImg from '../../assets/images/End.jpg';
 
 interface PresentationPageProps {
   project?: ReportWorkspaceProject;
@@ -320,7 +321,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
       : signInName.trim();
     const actorName = signInActorName.trim();
     const reason = signInReason.trim();
-    
+
     // Block self sign-in if authenticated identity is missing
     if (signInMode === 'self' && !authenticatedIdentity) {
       setSignInFeedback('無法取得您的身份資訊，請確認已登入系統');
@@ -355,7 +356,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     const meetingStartMs = Date.parse(resolvedProject.presentation.cover.meetingDateTime);
     const nowIsoString = new Date().toISOString();
     const status = Number.isFinite(meetingStartMs) && Date.now() > meetingStartMs ? 'late' : 'on_time';
-    
+
     // For self sign-in, use authenticated identity; otherwise use manual input
     const departmentId = signInMode === 'self' && authenticatedIdentity
       ? authenticatedIdentity.departmentId
@@ -363,7 +364,7 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
     const memberId = signInMode === 'self' && authenticatedIdentity
       ? authenticatedIdentity.memberId
       : resolveMemberId(signInDepartmentId, name);
-    
+
     const activePrimaryRecord = activeAttendanceSession.records.find((record) => record.memberId === memberId && !record.voidedAt);
     const correctionTargetRecord = activeAttendanceSession.records.find(
       (record) => record.id === signInCorrectionTargetId && !record.voidedAt
@@ -828,50 +829,76 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
           data-meeting-surface="true"
           elevation={0}
           sx={{
-            p: { xs: 3, md: 6 },
+            p: { xs: 0, md: 4 },
+            overflow: 'hidden',
             ...meetingSurfaceSx,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '50vh',
-            textAlign: 'center',
           }}
         >
-          <Typography
-            variant="h2"
+          <Box
             sx={{
-              fontWeight: 800,
-              mb: 2,
-              fontSize: `${2.5 * fontScale}rem`,
+              position: 'relative',
+              width: '100%',
+              maxWidth: '1080px',
+              mx: 'auto',
+              borderRadius: { xs: 0, md: 2 },
+              boxShadow: { xs: 'none', md: '0 12px 32px rgba(0,0,0,0.15)' },
+              overflow: 'hidden',
+              aspectRatio: '16/9',
+              backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.52), rgba(15, 23, 42, 0.52)), url(${endBgImg})`,
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              backgroundSize: 'cover',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              textAlign: 'center',
+              color: '#fff',
+              px: { xs: 3, md: 8 },
+              py: { xs: 5, md: 8 },
             }}
           >
-            {endSlideTitle}
-          </Typography>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 600,
-              mb: endSlideSupportingText ? 3 : 0,
-              fontSize: `${1.5 * fontScale}rem`,
-              color: 'text.secondary',
-            }}
-          >
-            {endSlideSubtitle}
-          </Typography>
-          {endSlideSupportingText && (
             <Typography
-              variant="body1"
+              variant="h2"
               sx={{
-                fontSize: `${1.1 * fontScale}rem`,
-                lineHeight: 1.8,
-                whiteSpace: 'pre-wrap',
-                maxWidth: 600,
+                fontWeight: 800,
+                mb: 2,
+                fontSize: `${2.6 * fontScale}rem`,
+                textShadow: '0 2px 10px rgba(0,0,0,0.35)',
               }}
             >
-              {endSlideSupportingText}
+              {endSlideTitle}
             </Typography>
-          )}
+
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 600,
+                mb: endSlideSupportingText ? 3 : 0,
+                fontSize: `${1.55 * fontScale}rem`,
+                color: 'rgba(255, 255, 255, 0.9)',
+                textShadow: '0 2px 8px rgba(0,0,0,0.28)',
+              }}
+            >
+              {endSlideSubtitle}
+            </Typography>
+
+            {endSlideSupportingText && (
+              <Typography
+                variant="body1"
+                sx={{
+                  fontSize: `${1.1 * fontScale}rem`,
+                  lineHeight: 1.8,
+                  whiteSpace: 'pre-wrap',
+                  maxWidth: 640,
+                  color: 'rgba(255, 255, 255, 0.92)',
+                  textShadow: '0 1px 4px rgba(0,0,0,0.24)',
+                }}
+              >
+                {endSlideSupportingText}
+              </Typography>
+            )}
+          </Box>
         </Paper>
 
         <Paper data-meeting-surface="true" elevation={0} sx={{ p: 1.5, ...meetingSurfaceSx, position: 'sticky', bottom: 0 }}>
@@ -884,7 +911,8 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   }
 
   // 渲染單一報表欄位，包含摘要截斷與展開收合控制。
-  const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: EmphasisCapableContent) => {
+  const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
+    const safeValue = typeof value === 'string' ? value : '';
     const expansionKey = buildFieldExpansionKey(departmentId, pageId, field);
     const isExpanded = expandedFields[expansionKey] ?? false;
     const plainText = extractPlainText(value);
@@ -913,27 +941,9 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
               }),
           }}
         >
-          {supportsEmphasis ? (
-            <EmphasisContentRenderer
-              content={value}
-              baseFontSize={0.95 * fontScale}
-              lineHeight={1.7}
-            />
-          ) : (
-            <Typography
-              component="span"
-              variant="body2"
-              sx={{
-                fontSize: `${0.95 * fontScale}rem`,
-                lineHeight: 1.7,
-              }}
-            >
-              {plainText.trim() || '（未填寫）'}
-            </Typography>
-          )}
-          {plainText.trim() || !supportsEmphasis ? null : '（未填寫）'}
-        </Box>
-        {shouldShowExpand(plainText) && (
+          {safeValue.trim() || '（未填寫）'}
+        </Typography>
+        {shouldShowExpand(safeValue) && (
           <Button
             variant="text"
             size="small"
