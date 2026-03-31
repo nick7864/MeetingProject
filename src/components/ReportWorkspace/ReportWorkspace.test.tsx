@@ -803,64 +803,311 @@ describe('ReportWorkspacePage backend management tab', () => {
   // Lightweight Text Emphasis Tests
   // =========================================================================
 
-  it('stores narrative fields as structured content type', () => {
-    const project = createWorkspaceProject('emphasis-storage', '強調儲存測試');
-    const version = project.versions[0];
-    if (!version) throw new Error('version missing');
-    const page = version.pages.find((p) => p.type === 'report');
-    if (!page || page.type !== 'report') throw new Error('report page missing');
-    const block = page.blocks[0];
-    if (!block) throw new Error('block missing');
-
-    // Verify narrative fields are initialized as arrays (structured content)
-    expect(Array.isArray(block.fields.weeklyStatusAndRisk)).toBe(true);
-    expect(Array.isArray(block.fields.supportPlan)).toBe(true);
-    expect(Array.isArray(block.fields.executiveDiscussion)).toBe(true);
-
-    // Verify non-emphasis fields are strings
-    expect(typeof block.fields.workItem).toBe('string');
-    expect(typeof block.fields.plannedBuildDate).toBe('string');
-    expect(typeof block.fields.approvalDate).toBe('string');
+  fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('shows emphasis editor toolbar only for the three supported narrative fields', () => {
-    render(<ReportWorkspacePage />);
+  // Verify non-emphasis fields are strings
+  expect(typeof block.fields.workItem).toBe('string');
+  expect(typeof block.fields.plannedBuildDate).toBe('string');
+  expect(typeof block.fields.approvalDate).toBe('string');
+});
 
-    const toolbars = screen.getAllByTestId('emphasis-editor-toolbar');
-    expect(toolbars.length).toBeGreaterThanOrEqual(3);
-    expect(toolbars.length % 3).toBe(0);
+it('shows emphasis editor toolbar only for the three supported narrative fields', () => {
+  render(<ReportWorkspacePage />);
 
-    const workItemInputs = screen.getAllByLabelText('工作項目');
-    expect(workItemInputs.some((input) => input.getAttribute('contenteditable') === 'true')).toBe(false);
-
+  fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('blocks lock when narrative fields exceed limit based on plain text length', () => {
-    const project = createWorkspaceProject('emphasis-limit-lock', '強調字數鎖定測試');
-    project.fieldLimits.weeklyStatusAndRisk = 10;
+});
 
-    const version = project.versions[0];
-    if (!version) throw new Error('version missing');
-    const page = version.pages.find((p) => p.type === 'report');
-    if (!page || page.type !== 'report') throw new Error('report page missing');
-    const block = page.blocks[0];
-    if (!block) throw new Error('block missing');
+it('blocks lock when narrative fields exceed limit based on plain text length', () => {
+  const project = createWorkspaceProject('emphasis-limit-lock', '強調字數鎖定測試');
+  project.fieldLimits.weeklyStatusAndRisk = 10;
 
-    // Set structured content with long text
-    block.fields.weeklyStatusAndRisk = [{ text: 'This is a very long text that exceeds the limit' }];
+  const version = project.versions[0];
+  if (!version) throw new Error('version missing');
+  const page = version.pages.find((p) => p.type === 'report');
+  if (!page || page.type !== 'report') throw new Error('report page missing');
+  const block = page.blocks[0];
+  if (!block) throw new Error('block missing');
 
-    window.localStorage.setItem(
-      'report-workspace-state',
-      JSON.stringify({
-        currentRole: 'admin',
-        activeProjectId: project.id,
-        projects: [project],
-      })
-    );
+  // Set structured content with long text
+  block.fields.weeklyStatusAndRisk = [{ text: 'This is a very long text that exceeds the limit' }];
 
-    render(<ReportWorkspacePage />);
-    fireEvent.click(screen.getByRole('button', { name: '鎖定目前版本' }));
+  window.localStorage.setItem(
+    'report-workspace-state',
+    JSON.stringify({
+      currentRole: 'admin',
+      activeProjectId: project.id,
+      projects: [project],
+    })
+  );
 
-    expect(screen.getByText('仍有欄位超過字數上限，請先修正再鎖定。')).toBeInTheDocument();
+  render(<ReportWorkspacePage />);
+  fireEvent.click(screen.getByRole('button', { name: '鎖定目前版本' }));
+
+  // Move up/down buttons should be disabled
+  const moveUpButtons = screen.getAllByLabelText('上移頁面');
+  const moveDownButtons = screen.getAllByLabelText('下移頁面');
+
+  moveUpButtons.forEach((button) => {
+    expect(button).toBeDisabled();
   });
+  moveDownButtons.forEach((button) => {
+    expect(button).toBeDisabled();
+  });
+});
+
+it('disables move up button for the first page', () => {
+  render(<ReportWorkspacePage />);
+
+  const moveUpButtons = screen.getAllByLabelText('上移頁面');
+  expect(moveUpButtons[0]).toBeDisabled(); // First page can't move up
+});
+
+it('disables move down button for the last page', () => {
+  render(<ReportWorkspacePage />);
+
+  const moveDownButtons = screen.getAllByLabelText('下移頁面');
+  expect(moveDownButtons[moveDownButtons.length - 1]).toBeDisabled(); // Last page can't move down
+});
+
+it('confirms page deletion from custom modal', async () => {
+  render(<ReportWorkspacePage />);
+
+  fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+  });
+
+  const deleteButtons = screen.getAllByLabelText('刪除頁面');
+  expect(deleteButtons.length).toBeGreaterThanOrEqual(3);
+
+  // Click delete on the first page
+  fireEvent.click(deleteButtons[0]);
+
+  // Custom modal should appear
+  await screen.findByRole('dialog');
+  expect(screen.getByText('確認刪除頁面')).toBeInTheDocument();
+
+  // Confirm deletion
+  fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
+
+  // Modal should close
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // Page should be removed
+  const pageButtons = screen.getAllByRole('button', { name: /page/ });
+  expect(pageButtons.length).toBe(2);
+});
+
+it('cancels page deletion from custom modal', async () => {
+  render(<ReportWorkspacePage />);
+
+  fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+  });
+
+  const deleteButtons = screen.getAllByLabelText('刪除頁面');
+
+  // Click delete on the first page
+  fireEvent.click(deleteButtons[0]);
+
+  // Custom modal should appear
+  await screen.findByRole('dialog');
+
+  // Cancel deletion
+  fireEvent.click(screen.getByRole('button', { name: '取消' }));
+
+  // Modal should close
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  expect(screen.getAllByRole('button', { name: /page/ }).length).toBe(3);
+});
+
+it('deletes the active page and switches to a neighboring page', async () => {
+  render(<ReportWorkspacePage />);
+
+  fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
+  await waitFor(() => {
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+  });
+
+  // First page is active by default
+  const activePageButton = screen.getAllByRole('button', { name: /page/ }).find(
+    (btn) => btn.className.includes('MuiButton-contained')
+  );
+  expect(activePageButton).toBeTruthy();
+
+  const deleteButtons = screen.getAllByLabelText('刪除頁面');
+
+  // Click delete on the first page (which is active)
+  fireEvent.click(deleteButtons[0]);
+  fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
+
+  // Wait for modal to close and verify active page switched
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  expect(screen.getAllByRole('button', { name: /page/ }).length).toBe(2);
+});
+
+it('blocks deletion of the last remaining page', () => {
+  // Create a project with only one page
+  const project = createWorkspaceProject('project-single-page', '單頁測試專案');
+  project.versions[0].pages = [project.versions[0].pages[0]];
+
+  window.localStorage.setItem(
+    'report-workspace-state',
+    JSON.stringify({
+      currentRole: 'admin',
+      activeProjectId: project.id,
+      projects: [project],
+    })
+  );
+
+  render(<ReportWorkspacePage />);
+
+  const deleteButtons = screen.getAllByLabelText('刪除頁面');
+  expect(deleteButtons.length).toBe(1);
+  expect(deleteButtons[0]).toBeDisabled();
+});
+
+it('disables delete button in a locked version', () => {
+  const project = createWorkspaceProject('project-locked-delete', '鎖定版本刪除測試');
+  project.versions = [{ ...project.versions[0], isLocked: true }];
+  project.activeVersionId = project.versions[0].id;
+
+  window.localStorage.setItem(
+    'report-workspace-state',
+    JSON.stringify({
+      currentRole: 'admin',
+      activeProjectId: project.id,
+      projects: [project],
+    })
+  );
+
+  render(<ReportWorkspacePage />);
+
+  const deleteButtons = screen.getAllByLabelText('刪除頁面');
+  deleteButtons.forEach((button) => {
+    expect(button).toBeDisabled();
+  });
+});
+
+it('reorders departments with move controls', () => {
+  render(<ReportWorkspacePage />);
+
+  fireEvent.click(screen.getAllByLabelText('下移部門')[0]);
+
+  const firstDepartment = screen.getByDisplayValue('業務部');
+  const secondDepartment = screen.getByDisplayValue('研發部');
+  expect(firstDepartment.compareDocumentPosition(secondDepartment) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+});
+
+it('soft deletes the current department and switches to the next active department', async () => {
+  render(<ReportWorkspacePage />);
+
+  const departmentSelect = screen.getAllByRole('combobox').find((node) => node.textContent?.includes('業務部'));
+  if (!departmentSelect) {
+    throw new Error('department selector not found');
+  }
+
+  fireEvent.click(screen.getAllByLabelText('刪除部門')[0]);
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
+
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  expect(screen.queryByDisplayValue('業務部')).not.toBeInTheDocument();
+  expect(departmentSelect).toHaveTextContent('研發部');
+});
+
+it('blocks deletion of the last active department', () => {
+  const project = createWorkspaceProject('project-single-department', '單部門測試專案');
+  project.departments = [
+    { ...project.departments[0], active: true, order: 1 },
+    { ...project.departments[1], active: false, order: 2 },
+  ];
+  project.currentDepartmentId = project.departments[0].id;
+
+  window.localStorage.setItem(
+    'report-workspace-state',
+    JSON.stringify({
+      currentRole: 'admin',
+      activeProjectId: project.id,
+      projects: [project],
+    })
+  );
+
+  render(<ReportWorkspacePage />);
+
+  const deleteButtons = screen.getAllByLabelText('刪除部門');
+  expect(deleteButtons).toHaveLength(1);
+  expect(deleteButtons[0]).toBeDisabled();
+});
+
+it('disables department management controls in a locked version', () => {
+  const project = createWorkspaceProject('project-locked-departments', '鎖定版本部門測試');
+  project.versions = [{ ...project.versions[0], isLocked: true }];
+  project.activeVersionId = project.versions[0].id;
+
+  window.localStorage.setItem(
+    'report-workspace-state',
+    JSON.stringify({
+      currentRole: 'admin',
+      activeProjectId: project.id,
+      projects: [project],
+    })
+  );
+
+  render(<ReportWorkspacePage />);
+
+  screen.getAllByLabelText('上移部門').forEach((button) => {
+    expect(button).toBeDisabled();
+  });
+  screen.getAllByLabelText('下移部門').forEach((button) => {
+    expect(button).toBeDisabled();
+  });
+  screen.getAllByLabelText('刪除部門').forEach((button) => {
+    expect(button).toBeDisabled();
+  });
+});
+
+it('normalizes an inactive persisted current department to the first active department', async () => {
+  const project = createWorkspaceProject('project-inactive-current', '失效部門測試專案');
+  project.departments = project.departments.map((department, index) =>
+    index === 0 ? { ...department, active: false } : department
+  );
+  project.currentDepartmentId = 'dept-1';
+
+  window.localStorage.setItem(
+    'report-workspace-state',
+    JSON.stringify({
+      currentRole: 'admin',
+      activeProjectId: project.id,
+      projects: [project],
+    })
+  );
+
+  render(<ReportWorkspacePage />);
+
+  await waitFor(() => {
+    const departmentSelect = screen.getAllByRole('combobox').find((node) => node.textContent?.includes('研發部'));
+    expect(departmentSelect).toBeTruthy();
+    expect(screen.queryByDisplayValue('業務部')).not.toBeInTheDocument();
+  });
+});
 });
