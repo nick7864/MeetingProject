@@ -803,18 +803,7 @@ describe('ReportWorkspacePage backend management tab', () => {
   // Lightweight Text Emphasis Tests
   // =========================================================================
 
-  fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-  await waitFor(() => {
-    expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
-  });
-
-  // Verify non-emphasis fields are strings
-  expect(typeof block.fields.workItem).toBe('string');
-  expect(typeof block.fields.plannedBuildDate).toBe('string');
-  expect(typeof block.fields.approvalDate).toBe('string');
-});
-
-it('shows emphasis editor toolbar only for the three supported narrative fields', () => {
+  it('shows emphasis editor toolbar only for the three supported narrative fields', async () => {
   render(<ReportWorkspacePage />);
 
   fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));

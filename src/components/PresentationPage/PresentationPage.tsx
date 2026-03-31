@@ -263,11 +263,12 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   const summaryLines = Math.max(1, resolvedProject.presentation.summaryLines || 4);
 
   // 判斷報表欄位是否需要顯示展開全文按鈕。
-  const shouldShowExpand = (value: string) => {
-    if (!value.trim()) {
+  const shouldShowExpand = (value: EmphasisCapableContent) => {
+    const plainText = extractPlainText(value);
+    if (!plainText.trim()) {
       return false;
     }
-    return value.length > summaryLines * 40;
+    return plainText.length > summaryLines * 40;
   };
 
   // 產生欄位展開狀態的唯一 key，避免不同頁面互相影響。
@@ -911,8 +912,13 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
   }
 
   // 渲染單一報表欄位，包含摘要截斷與展開收合控制。
-  const renderReportField = (departmentId: string, pageId: string, field: keyof ReportFields, label: string, value: string) => {
-    const safeValue = typeof value === 'string' ? value : '';
+  const renderReportField = (
+    departmentId: string,
+    pageId: string,
+    field: keyof ReportFields,
+    label: string,
+    value: ReportFields[keyof ReportFields]
+  ) => {
     const expansionKey = buildFieldExpansionKey(departmentId, pageId, field);
     const isExpanded = expandedFields[expansionKey] ?? false;
     const plainText = extractPlainText(value);
@@ -941,9 +947,17 @@ export const PresentationPage: React.FC<PresentationPageProps> = ({ project, onF
               }),
           }}
         >
-          {safeValue.trim() || '（未填寫）'}
-        </Typography>
-        {shouldShowExpand(safeValue) && (
+          {supportsEmphasis ? (
+            <EmphasisContentRenderer
+              content={value}
+              baseFontSize={0.95 * fontScale}
+              lineHeight={1.7}
+            />
+          ) : (
+            plainText.trim() || '（未填寫）'
+          )}
+        </Box>
+        {shouldShowExpand(value) && (
           <Button
             variant="text"
             size="small"
