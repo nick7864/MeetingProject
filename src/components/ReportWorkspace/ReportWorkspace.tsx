@@ -125,14 +125,17 @@ const loadPersistedState = (): ReportWorkspaceState => {
 const getAssistantReply = (project: ReportWorkspaceProject, userInput: string): string => {
   const activeVersion = project.versions.find((version) => version.id === project.activeVersionId);
   const activePage = activeVersion?.pages.find((page) => page.id === project.activePageId);
+  const activeDepartmentIds = new Set(sortActiveDepartments(project.departments).map((department) => department.id));
+  const currentDepartmentId = resolveCurrentDepartmentId(project.departments, project.currentDepartmentId);
   if (!activeVersion || !activePage) {
     return '目前沒有可分析內容，請先選擇版本與頁面。';
   }
 
   if (activePage.type === 'report') {
-    const completedCount = activePage.blocks.filter((block) => block.isCompleted).length;
+    const activeBlocks = activePage.blocks.filter((block) => activeDepartmentIds.has(block.departmentId));
+    const completedCount = activeBlocks.filter((block) => block.isCompleted).length;
     const pendingNames = activePage.blocks
-      .filter((block) => !block.isCompleted)
+      .filter((block) => activeDepartmentIds.has(block.departmentId) && !block.isCompleted)
       .map((block) => project.departments.find((department) => department.id === block.departmentId)?.name ?? block.departmentId);
 
     if (userInput.includes('風險') || userInput.includes('預警')) {
@@ -140,21 +143,20 @@ const getAssistantReply = (project: ReportWorkspaceProject, userInput: string): 
         return `目前版本 v${activeVersion.versionNo} 的一般報表頁已全部完成，暫無明顯填報風險。建議聚焦跨部門協作與決議追蹤。`;
       }
 
-      return `目前版本 v${activeVersion.versionNo} 在此頁已完成 ${completedCount}/${activePage.blocks.length}。建議優先追蹤未完成部門：${pendingNames.join('、')}。`;
+      return `目前版本 v${activeVersion.versionNo} 在此頁已完成 ${completedCount}/${activeBlocks.length}。建議優先追蹤未完成部門：${pendingNames.join('、')}。`;
     }
 
-    return `已分析一般報表頁：完成 ${completedCount}/${activePage.blocks.length}。可先確認「本周、下周辦理情形暨工作預警」與「待層峰討論 & 決議」欄位是否齊全。`;
+    return `已分析一般報表頁：完成 ${completedCount}/${activeBlocks.length}。可先確認「本周、下周辦理情形暨工作預警」與「待層峰討論 & 決議」欄位是否齊全。`;
   }
 
-  const activeGroup = activePage.groups.find((group) => group.departmentId === project.currentDepartmentId);
+  const activeGroup = activePage.groups.find((group) => group.departmentId === currentDepartmentId);
   const imageCount = activeGroup?.images.length ?? 0;
 
   if (imageCount === 0) {
     return `目前版本 v${activeVersion.versionNo} 的圖片頁尚未上傳圖片，建議先上傳現況照片再進行分析。`;
   }
 
-  const departmentName =
-    project.departments.find((department) => department.id === project.currentDepartmentId)?.name ?? project.currentDepartmentId;
+  const departmentName = project.departments.find((department) => department.id === currentDepartmentId)?.name ?? currentDepartmentId;
   return `已分析圖片頁（${departmentName}）：共有 ${imageCount} 張圖片。可優先補齊關鍵圖片註解，方便跨部門同步。`;
 };
 
@@ -368,6 +370,29 @@ const parseAttendanceRosterDraft = (
   };
 };
 
+const sortActiveDepartments = (departments: WorkspaceDepartment[]) => {
+  return [...departments].filter((department) => department.active).sort((a, b) => a.order - b.order);
+};
+
+const normalizeDepartmentOrders = (departments: WorkspaceDepartment[]) => {
+  const activeDepartments = [...departments].filter((department) => department.active).sort((a, b) => a.order - b.order);
+  const inactiveDepartments = [...departments].filter((department) => !department.active).sort((a, b) => a.order - b.order);
+
+  return activeDepartments.concat(inactiveDepartments).map((department, index) => ({
+    ...department,
+    order: index + 1,
+  }));
+};
+
+const resolveCurrentDepartmentId = (departments: WorkspaceDepartment[], currentDepartmentId: string) => {
+  const activeDepartments = sortActiveDepartments(departments);
+  if (activeDepartments.some((department) => department.id === currentDepartmentId)) {
+    return currentDepartmentId;
+  }
+
+  return activeDepartments[0]?.id ?? '';
+};
+
 export const ReportWorkspacePage: React.FC = () => {
   const theme = useTheme();
   const [state, setState] = useState<ReportWorkspaceState>(loadPersistedState);
@@ -389,6 +414,7 @@ export const ReportWorkspacePage: React.FC = () => {
   const [attendanceRosterImportMode, setAttendanceRosterImportMode] = useState<AttendanceRosterImportMode>('replace');
   const [attendanceRosterPreview, setAttendanceRosterPreview] = useState<AttendanceRosterPreviewState | null>(null);
   const [pageToDelete, setPageToDelete] = useState<WorkspacePage | null>(null);
+  const [departmentToDelete, setDepartmentToDelete] = useState<WorkspaceDepartment | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -430,8 +456,12 @@ export const ReportWorkspacePage: React.FC = () => {
   );
 
   const sortedDepartments = useMemo(
-    () => [...(activeProject?.departments ?? [])].filter((department) => department.active).sort((a, b) => a.order - b.order),
+    () => sortActiveDepartments(activeProject?.departments ?? []),
     [activeProject?.departments]
+  );
+  const effectiveCurrentDepartmentId = useMemo(
+    () => resolveCurrentDepartmentId(activeProject?.departments ?? [], activeProject?.currentDepartmentId ?? ''),
+    [activeProject?.currentDepartmentId, activeProject?.departments]
   );
 
   const activeAttendanceSession = useMemo(() => {
@@ -458,6 +488,17 @@ export const ReportWorkspacePage: React.FC = () => {
     setAttendanceRosterDraft(buildAttendanceRosterDraft(activeAttendanceSession.expectedRoster, activeProject?.departments ?? []));
     setAttendanceRosterPreview(null);
   }, [activeAttendanceSession, activeProject?.departments]);
+
+  useEffect(() => {
+    if (!activeProject || !effectiveCurrentDepartmentId || activeProject.currentDepartmentId === effectiveCurrentDepartmentId) {
+      return;
+    }
+
+    updateActiveProject((project) => ({
+      ...project,
+      currentDepartmentId: effectiveCurrentDepartmentId,
+    }));
+  }, [activeProject, effectiveCurrentDepartmentId]);
 
   useEffect(() => {
     let didAutoLock = false;
@@ -784,6 +825,55 @@ export const ReportWorkspacePage: React.FC = () => {
         department.id === departmentId ? { ...department, name } : department
       ),
     }));
+  };
+
+  const handleReorderDepartment = (departmentId: string, direction: 'up' | 'down') => {
+    if (!activeProject || !activeVersionCanEdit) {
+      return;
+    }
+
+    updateActiveProject((project) => {
+      const reorderedActiveDepartments = reorderItems(sortActiveDepartments(project.departments), departmentId, direction);
+      const inactiveDepartments = project.departments.filter((department) => !department.active);
+
+      return {
+        ...project,
+        departments: normalizeDepartmentOrders(reorderedActiveDepartments.concat(inactiveDepartments)),
+      };
+    });
+  };
+
+  const handleDeleteDepartment = () => {
+    if (!departmentToDelete || !activeProject || !activeVersionCanEdit) {
+      return;
+    }
+
+    const activeDepartments = sortActiveDepartments(activeProject.departments);
+    if (activeDepartments.length <= 1) {
+      setDepartmentToDelete(null);
+      return;
+    }
+
+    updateActiveProject((project) => {
+      const projectActiveDepartments = sortActiveDepartments(project.departments);
+      const deletingIndex = projectActiveDepartments.findIndex((department) => department.id === departmentToDelete.id);
+      const remainingActiveDepartments = projectActiveDepartments.filter((department) => department.id !== departmentToDelete.id);
+      const nextCurrentDepartmentId = project.currentDepartmentId === departmentToDelete.id
+        ? remainingActiveDepartments[Math.min(deletingIndex, remainingActiveDepartments.length - 1)]?.id ?? remainingActiveDepartments[0]?.id ?? ''
+        : project.currentDepartmentId;
+
+      return {
+        ...project,
+        currentDepartmentId: nextCurrentDepartmentId,
+        departments: normalizeDepartmentOrders(
+          project.departments.map((department) =>
+            department.id === departmentToDelete.id ? { ...department, active: false } : department
+          )
+        ),
+      };
+    });
+
+    setDepartmentToDelete(null);
   };
 
   // 在目前可編輯版本新增一頁，並切到新建立的頁面。
@@ -1624,7 +1714,7 @@ export const ReportWorkspacePage: React.FC = () => {
 
         <Select
           size="small"
-          value={activeProject?.currentDepartmentId ?? ''}
+          value={effectiveCurrentDepartmentId}
           onChange={(event) =>
             updateActiveProject((project) => ({
               ...project,
@@ -1713,15 +1803,42 @@ export const ReportWorkspacePage: React.FC = () => {
                 部門設定
               </Typography>
               <Stack spacing={1.25}>
-                {sortedDepartments.map((department) => (
-                  <TextField
-                    key={department.id}
-                    size="small"
-                    label={`部門 ${department.order}`}
-                    value={department.name}
-                    onChange={(event) => handleDepartmentRename(department.id, event.target.value)}
-                    disabled={!isAdmin || !activeVersionCanEdit}
-                  />
+                {sortedDepartments.map((department, index) => (
+                  <Box key={department.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <TextField
+                      size="small"
+                      label={`部門 ${index + 1}`}
+                      value={department.name}
+                      onChange={(event) => handleDepartmentRename(department.id, event.target.value)}
+                      disabled={!isAdmin || !activeVersionCanEdit}
+                      sx={{ flex: 1 }}
+                    />
+                    <IconButton
+                      size="small"
+                      aria-label="上移部門"
+                      onClick={() => handleReorderDepartment(department.id, 'up')}
+                      disabled={!activeVersionCanEdit || index === 0}
+                    >
+                      <ArrowUpwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      aria-label="下移部門"
+                      onClick={() => handleReorderDepartment(department.id, 'down')}
+                      disabled={!activeVersionCanEdit || index === sortedDepartments.length - 1}
+                    >
+                      <ArrowDownwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      aria-label="刪除部門"
+                      onClick={() => setDepartmentToDelete(department)}
+                      disabled={!activeVersionCanEdit || sortedDepartments.length <= 1}
+                      color="error"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
                 ))}
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <TextField
@@ -2154,7 +2271,8 @@ export const ReportWorkspacePage: React.FC = () => {
                     <Stack spacing={2}>
                       {activePage.blocks
                         .filter((block) =>
-                          isAdmin ? true : block.departmentId === (activeProject?.currentDepartmentId ?? '')
+                          sortedDepartments.some((department) => department.id === block.departmentId)
+                          && (isAdmin ? true : block.departmentId === effectiveCurrentDepartmentId)
                         )
                         .slice()
                         .sort((a, b) => {
@@ -2167,7 +2285,7 @@ export const ReportWorkspacePage: React.FC = () => {
                             activeProject?.departments.find((department) => department.id === block.departmentId)?.name ?? block.departmentId;
                           const editable = canEditDepartmentBlock(
                             state.currentRole,
-                            activeProject?.currentDepartmentId ?? '',
+                            effectiveCurrentDepartmentId,
                             block,
                             activeVersionCanEdit
                           );
@@ -2260,13 +2378,13 @@ export const ReportWorkspacePage: React.FC = () => {
                     <Stack spacing={2}>
                       {(() => {
                         const activeImageGroup =
-                          activePage.groups.find((group) => group.departmentId === activeProject?.currentDepartmentId) ?? {
-                            departmentId: activeProject?.currentDepartmentId ?? '',
+                          activePage.groups.find((group) => group.departmentId === effectiveCurrentDepartmentId) ?? {
+                            departmentId: effectiveCurrentDepartmentId,
                             images: [],
                           };
                         const currentDepartmentName =
-                          activeProject?.departments.find((department) => department.id === activeProject.currentDepartmentId)?.name ??
-                          activeProject?.currentDepartmentId;
+                          activeProject?.departments.find((department) => department.id === effectiveCurrentDepartmentId)?.name ??
+                          effectiveCurrentDepartmentId;
 
                         return (
                           <>
@@ -2286,7 +2404,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                 type="file"
                                 accept="image/*"
                                 onChange={(event) => {
-                                  handleUploadImages(activePage.id, activeProject?.currentDepartmentId ?? '', event.target.files);
+                                  handleUploadImages(activePage.id, effectiveCurrentDepartmentId, event.target.files);
                                   event.target.value = '';
                                 }}
                               />
@@ -2320,7 +2438,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                         label="註解"
                                         value={image.note}
                                         onChange={(event) =>
-                                          handleImageNoteChange(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, event.target.value)
+                                          handleImageNoteChange(activePage.id, effectiveCurrentDepartmentId, image.id, event.target.value)
                                         }
                                         disabled={!activeVersionCanEdit}
                                       />
@@ -2328,7 +2446,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                         <IconButton
                                           size="small"
                                           onClick={() =>
-                                            handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'up')
+                                            handleReorderImage(activePage.id, effectiveCurrentDepartmentId, image.id, 'up')
                                           }
                                           disabled={!activeVersionCanEdit || index === 0}
                                         >
@@ -2337,7 +2455,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                         <IconButton
                                           size="small"
                                           onClick={() =>
-                                            handleReorderImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id, 'down')
+                                            handleReorderImage(activePage.id, effectiveCurrentDepartmentId, image.id, 'down')
                                           }
                                           disabled={!activeVersionCanEdit || index === sorted.length - 1}
                                         >
@@ -2346,9 +2464,7 @@ export const ReportWorkspacePage: React.FC = () => {
                                         <Button
                                           size="small"
                                           color="error"
-                                          onClick={() =>
-                                            handleDeleteImage(activePage.id, activeProject?.currentDepartmentId ?? '', image.id)
-                                          }
+                                          onClick={() => handleDeleteImage(activePage.id, effectiveCurrentDepartmentId, image.id)}
                                           disabled={!activeVersionCanEdit}
                                         >
                                           刪除
@@ -2535,6 +2651,24 @@ export const ReportWorkspacePage: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setPageToDelete(null)}>取消</Button>
           <Button onClick={handleDeletePage} variant="contained" color="error">
+            確認刪除
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!departmentToDelete} onClose={() => setDepartmentToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>確認刪除部門</DialogTitle>
+        <DialogContent>
+          <Typography>
+            確定要停用部門「{departmentToDelete?.name}」嗎？
+          </Typography>
+          <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+            停用後不再出現在啟用部門清單，但既有歷史資料仍會保留。
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDepartmentToDelete(null)}>取消</Button>
+          <Button onClick={handleDeleteDepartment} variant="contained" color="error">
             確認刪除
           </Button>
         </DialogActions>

@@ -802,11 +802,10 @@ describe('ReportWorkspacePage backend management tab', () => {
   it('moves a middle page upward when move up button is clicked', async () => {
     render(<ReportWorkspacePage />);
 
-    // Add a third page so we have multiple pages to reorder
     fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+    });
 
     const pageButtons = screen.getAllByRole('button', { name: /page/ });
     expect(pageButtons.length).toBeGreaterThanOrEqual(3);
@@ -824,11 +823,10 @@ describe('ReportWorkspacePage backend management tab', () => {
   it('moves a middle page downward when move down button is clicked', async () => {
     render(<ReportWorkspacePage />);
 
-    // Add a third page so we have multiple pages to reorder
     fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+    });
 
     const pageButtons = screen.getAllByRole('button', { name: /page/ });
     expect(pageButtons.length).toBeGreaterThanOrEqual(3);
@@ -887,11 +885,10 @@ describe('ReportWorkspacePage backend management tab', () => {
   it('confirms page deletion from custom modal', async () => {
     render(<ReportWorkspacePage />);
 
-    // Add a third page so we have more than 2 pages
     fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+    });
 
     const deleteButtons = screen.getAllByLabelText('刪除頁面');
     expect(deleteButtons.length).toBeGreaterThanOrEqual(3);
@@ -901,7 +898,7 @@ describe('ReportWorkspacePage backend management tab', () => {
 
     // Custom modal should appear
     await screen.findByRole('dialog');
-    expect(screen.getByText(/確認刪除/)).toBeInTheDocument();
+    expect(screen.getByText('確認刪除頁面')).toBeInTheDocument();
 
     // Confirm deletion
     fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
@@ -919,11 +916,10 @@ describe('ReportWorkspacePage backend management tab', () => {
   it('cancels page deletion from custom modal', async () => {
     render(<ReportWorkspacePage />);
 
-    // Add a third page so we have more than 2 pages
     fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+    });
 
     const deleteButtons = screen.getAllByLabelText('刪除頁面');
 
@@ -941,18 +937,16 @@ describe('ReportWorkspacePage backend management tab', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    // Page should still exist
-    expect(screen.getByText('一般報表-page1')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBe(3);
   });
 
   it('deletes the active page and switches to a neighboring page', async () => {
     render(<ReportWorkspacePage />);
 
-    // Add a third page so we have more than 2 pages
     fireEvent.click(screen.getByRole('button', { name: '新增頁面' }));
-
-    // Wait for the new page to appear
-    await screen.findByText('一般報表-page3');
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /page/ }).length).toBeGreaterThanOrEqual(3);
+    });
 
     // First page is active by default
     const activePageButton = screen.getAllByRole('button', { name: /page/ }).find(
@@ -970,6 +964,8 @@ describe('ReportWorkspacePage backend management tab', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+
+    expect(screen.getAllByRole('button', { name: /page/ }).length).toBe(2);
   });
 
   it('blocks deletion of the last remaining page', () => {
@@ -1012,6 +1008,112 @@ describe('ReportWorkspacePage backend management tab', () => {
     const deleteButtons = screen.getAllByLabelText('刪除頁面');
     deleteButtons.forEach((button) => {
       expect(button).toBeDisabled();
+    });
+  });
+
+  it('reorders departments with move controls', () => {
+    render(<ReportWorkspacePage />);
+
+    fireEvent.click(screen.getAllByLabelText('下移部門')[0]);
+
+    const firstDepartment = screen.getByDisplayValue('業務部');
+    const secondDepartment = screen.getByDisplayValue('研發部');
+    expect(firstDepartment.compareDocumentPosition(secondDepartment) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
+
+  it('soft deletes the current department and switches to the next active department', async () => {
+    render(<ReportWorkspacePage />);
+
+    const departmentSelect = screen.getAllByRole('combobox').find((node) => node.textContent?.includes('業務部'));
+    if (!departmentSelect) {
+      throw new Error('department selector not found');
+    }
+
+    fireEvent.click(screen.getAllByLabelText('刪除部門')[0]);
+    await screen.findByRole('dialog');
+    fireEvent.click(screen.getByRole('button', { name: '確認刪除' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    expect(screen.queryByDisplayValue('業務部')).not.toBeInTheDocument();
+    expect(departmentSelect).toHaveTextContent('研發部');
+  });
+
+  it('blocks deletion of the last active department', () => {
+    const project = createWorkspaceProject('project-single-department', '單部門測試專案');
+    project.departments = [
+      { ...project.departments[0], active: true, order: 1 },
+      { ...project.departments[1], active: false, order: 2 },
+    ];
+    project.currentDepartmentId = project.departments[0].id;
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    const deleteButtons = screen.getAllByLabelText('刪除部門');
+    expect(deleteButtons).toHaveLength(1);
+    expect(deleteButtons[0]).toBeDisabled();
+  });
+
+  it('disables department management controls in a locked version', () => {
+    const project = createWorkspaceProject('project-locked-departments', '鎖定版本部門測試');
+    project.versions = [{ ...project.versions[0], isLocked: true }];
+    project.activeVersionId = project.versions[0].id;
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    screen.getAllByLabelText('上移部門').forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+    screen.getAllByLabelText('下移部門').forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+    screen.getAllByLabelText('刪除部門').forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+  });
+
+  it('normalizes an inactive persisted current department to the first active department', async () => {
+    const project = createWorkspaceProject('project-inactive-current', '失效部門測試專案');
+    project.departments = project.departments.map((department, index) =>
+      index === 0 ? { ...department, active: false } : department
+    );
+    project.currentDepartmentId = 'dept-1';
+
+    window.localStorage.setItem(
+      'report-workspace-state',
+      JSON.stringify({
+        currentRole: 'admin',
+        activeProjectId: project.id,
+        projects: [project],
+      })
+    );
+
+    render(<ReportWorkspacePage />);
+
+    await waitFor(() => {
+      const departmentSelect = screen.getAllByRole('combobox').find((node) => node.textContent?.includes('研發部'));
+      expect(departmentSelect).toBeTruthy();
+      expect(screen.queryByDisplayValue('業務部')).not.toBeInTheDocument();
     });
   });
 });
